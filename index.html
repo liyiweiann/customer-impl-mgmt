@@ -836,33 +836,41 @@ function loadData() {
 // 启动时异步从 GitHub 拉取最新数据
 async function initGitHubSync() {
   const statusEl = document.getElementById('sync-status');
-  const remoteData = await loadFromGitHub();
-  if (remoteData) {
-    const localRaw = localStorage.getItem(STORAGE_KEY);
-    const localData = localRaw ? JSON.parse(localRaw) : null;
-    // 比较时间戳：远程数据较新则更新
-    const remoteTime = remoteData._syncTime || 0;
-    const localTime = (localData && localData._syncTime) || 0;
-    if (remoteTime > localTime) {
-      migrateData(remoteData);
-      saveData(remoteData);
-      appData = remoteData;
-      // 刷新当前页面
-      const activePage = document.querySelector('.page.active');
-      if (activePage) {
-        const pageId = activePage.id.replace('page-', '');
-        switchPage(pageId);
+  try {
+    const remoteData = await loadFromGitHub();
+    if (remoteData) {
+      const localRaw = localStorage.getItem(STORAGE_KEY);
+      const localData = localRaw ? JSON.parse(localRaw) : null;
+      // 远程有数据时：本地无数据则直接用远程；有数据则比较时间戳
+      const remoteTime = remoteData._syncTime || 0;
+      const localTime = (localData && localData._syncTime) || 0;
+      if (!localData || remoteTime > localTime) {
+        migrateData(remoteData);
+        saveData(remoteData);
+        appData = remoteData;
+        // 刷新当前页面
+        const activePage = document.querySelector('.page.active');
+        if (activePage) {
+          const pageId = activePage.id.replace('page-', '');
+          switchPage(pageId);
+        }
+        if (localData && remoteTime > localTime) {
+          statusEl.textContent = '☁️ 已从线上拉取最新数据';
+          setTimeout(() => { statusEl.textContent = ''; }, 5000);
+        } else if (!localData) {
+          statusEl.textContent = '☁️ 已加载线上数据';
+          setTimeout(() => { statusEl.textContent = ''; }, 5000);
+        }
       }
-      if (localData) {
-        statusEl.textContent = '☁️ 已从线上拉取最新数据';
-        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+    } else {
+      // 线上无远程数据或加载失败，使用本地数据
+      if (statusEl && location.hostname === 'liyiweiann.github.io') {
+        statusEl.textContent = '⚠️ 线上数据加载失败，请稍后刷新';
+        setTimeout(() => { statusEl.textContent = ''; }, 8000);
       }
     }
-    if (!localData) {
-      // 首次访问，使用远程数据
-      statusEl.textContent = '☁️ 已加载线上数据';
-      setTimeout(() => { statusEl.textContent = ''; }, 5000);
-    }
+  } catch(e) {
+    console.warn('initGitHubSync 异常:', e);
   }
 }
 
@@ -871,7 +879,10 @@ function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)
 // ========== GitHub 同步 ==========
 const GITHUB_REPO = 'liyiweiann/customer-impl-mgmt';
 const GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO;
-const GITHUB_RAW = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/data.json';
+// 从 GitHub Pages 同域加载 data.json（同源，无跨域问题，无 CDN 缓存问题）
+const GITHUB_DATA_URL = (location.hostname === 'liyiweiann.github.io')
+  ? location.origin + '/customer-impl-mgmt/data.json'
+  : 'https://liyiweiann.github.io/customer-impl-mgmt/data.json';
 const GITHUB_TOKEN_KEY = 'gh_sync_token';
 
 function getGitHubToken() {
@@ -884,11 +895,12 @@ function setGitHubToken(token) {
 // 页面加载时从 GitHub 拉取最新数据
 async function loadFromGitHub() {
   try {
-    const resp = await fetch(GITHUB_RAW + '?t=' + Date.now());
-    if (!resp.ok) return null;
+    const resp = await fetch(GITHUB_DATA_URL + '?t=' + Date.now());
+    if (!resp.ok) { console.warn('loadFromGitHub: HTTP', resp.status); return null; }
     const data = await resp.json();
     if (data && (data.customers || data.partners)) return data;
-  } catch(e) {}
+    console.warn('loadFromGitHub: 数据格式不正确');
+  } catch(e) { console.warn('loadFromGitHub 失败:', e); }
   return null;
 }
 
