@@ -866,11 +866,7 @@ async function initGitHubSync() {
   }
 }
 
-// 每次同步时记录时间戳
-const _originalSaveData = saveData;
-saveData = function(data) {
-  _originalSaveData(data);
-}
+function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 
 // ========== GitHub 同步 ==========
 const GITHUB_REPO = 'liyiweiann/customer-impl-mgmt';
