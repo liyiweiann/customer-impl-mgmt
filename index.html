@@ -234,6 +234,34 @@ tbody tr:last-child td { border-bottom: none; }
 .sync-status a { color: #4096ff; text-decoration: none; }
 .sync-status a:hover { text-decoration: underline; }
 
+/* ===== 只读模式（GitHub Pages 线上版） ===== */
+body.readonly .sidebar-footer,
+body.readonly .btn-primary,
+body.readonly .btn-danger,
+body.readonly .btn-success,
+body.readonly .btn-link,
+body.readonly .upload-btn,
+body.readonly .backup-btn,
+body.readonly .sync-btn,
+body.readonly .sync-status,
+body.readonly .inline-form,
+body.readonly .col-fixed-right,
+body.readonly #page-settings,
+body.readonly .kanban-card { cursor: default !important; }
+body.readonly .sidebar-footer,
+body.readonly .inline-form { display: none !important; }
+body.readonly .btn-primary,
+body.readonly .btn-danger,
+body.readonly .btn-success,
+body.readonly .btn-link { display: none !important; }
+body.readonly .col-fixed-right { display: none !important; }
+body.readonly .settings-menu-item { display: none !important; }
+body.readonly .kanban-card { pointer-events: auto; }
+body.readonly td button[onclick*="togglePartnerProxy"] { display: none !important; }
+body.readonly .proxy-th { display: none !important; }
+body.readonly .readonly-badge { display: inline-block; }
+.readonly-badge { display: none; background: rgba(64,150,255,0.12); color: #4096ff; font-size: 12px; padding: 3px 10px; border-radius: 4px; margin-left: 10px; font-weight: 500; letter-spacing: 0.5px; }
+
 /* 导入结果提示 */
 .import-toast { position: fixed; top: 24px; right: 24px; padding: 14px 20px; border-radius: var(--radius-sm); font-size: var(--text-base); z-index: 2000; display: none; animation: slideIn 0.3s ease; box-shadow: var(--shadow-md); backdrop-filter: blur(8px); }
 .import-toast.show { display: block; }
@@ -275,7 +303,7 @@ tbody tr:last-child td { border-bottom: none; }
   <div class="sidebar">
     <div class="sidebar-header">
       <h1>📋 客户实施管理</h1>
-      <div class="subtitle">Implementation Management</div>
+      <div class="subtitle">Implementation Management <span class="readonly-badge">只读模式</span></div>
     </div>
     <div class="sidebar-menu">
       <div class="menu-item active" data-page="kanban" onclick="switchPage('kanban')">
@@ -284,7 +312,7 @@ tbody tr:last-child td { border-bottom: none; }
       <div class="menu-item" data-page="customer" onclick="switchPage('customer')">
         <span class="icon">👥</span> 客户管理
       </div>
-      <div class="menu-item" data-page="settings" onclick="switchPage('settings')">
+      <div class="menu-item settings-menu-item" data-page="settings" onclick="switchPage('settings')">
         <span class="icon">⚙️</span> 基础数据管理
       </div>
       <div class="menu-item" data-page="partner" onclick="switchPage('partner')">
@@ -395,7 +423,7 @@ tbody tr:last-child td { border-bottom: none; }
                   <th>到期时间</th>
                   <th>行业</th>
                   <th>行业均上线天</th>
-                  <th class="col-fixed-right" style="width:130px;">操作</th>
+                  <th class="col-fixed-right action-col" style="width:130px;">操作</th>
                 </tr>
               </thead>
               <tbody id="customer-tbody"></tbody>
@@ -499,7 +527,7 @@ tbody tr:last-child td { border-bottom: none; }
                   <th>下单客户</th>
                   <th>是否上线</th>
                   <th>实施进度判定</th>
-                  <th>代实施</th>
+                  <th class="proxy-th">代实施</th>
                 </tr>
               </thead>
               <tbody id="partner-tbody"></tbody>
@@ -1119,6 +1147,12 @@ function doSnapshotCompare() {
 
 let appData = loadData();
 
+// ===== 只读模式检测（GitHub Pages 线上版自动只读） =====
+const IS_READONLY = location.hostname === 'liyiweiann.github.io';
+if (IS_READONLY) {
+  document.body.classList.add('readonly');
+}
+
 // 启动时从 GitHub 拉取最新数据
 initGitHubSync();
 
@@ -1253,6 +1287,7 @@ function getKanbanFilters() {
 }
 
 function viewCustomerFromKanban(companyId) {
+  if (IS_READONLY) return; // 只读模式下点击看板卡片不操作
   switchPage('customer');
   const c = appData.customers.find(c => c.companyId === companyId);
   if (c) openCustomerModal(c);
@@ -2287,10 +2322,10 @@ function renderPartnerTable() {
         '<td>' + (p.orderCustomers || 0) + '</td>' +
         '<td><span class="tag-online-cell ' + judge.statusClass + '">' + judge.status + '</span></td>' +
         progress.cell +
-        '<td style="text-align:center;">' +
+        (IS_READONLY ? '' : '<td style="text-align:center;">' +
           '<button class="btn btn-sm" style="padding:3px 10px;font-size:12px;' + (p.proxyImplementation ? 'background:#FF6B40;color:#fff;' : 'background:transparent;color:#667788;') + '" onclick="togglePartnerProxy(\'' + p.companyId + '\',true)">是</button>' +
           '<button class="btn btn-sm" style="padding:3px 10px;font-size:12px;margin-left:2px;' + (!p.proxyImplementation ? 'background:#334455;color:#8899aa;' : 'background:transparent;color:#667788;') + '" onclick="togglePartnerProxy(\'' + p.companyId + '\',false)">否</button>' +
-        '</td>' +
+        '</td>') +
         '</tr>';
     }).join('');
   }
