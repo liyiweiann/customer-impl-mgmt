@@ -2581,7 +2581,7 @@
       "enabledCustomers": 0,
       "orderCustomers": 0,
       "location": "",
-      "latestProgress": "",
+      "latestProgress": "商品资料已经录入的差不多了！小程序目前在申请中。",
       "unusedAnalysis": "",
       "prevProductCount": 101,
       "snapshotDate": "2026-06-17"
@@ -2773,6 +2773,13 @@
       {
         "time": "2026-06-12 10:24",
         "content": "已完成首次培训，暂不开支付，小程序申请需要先变更营业执照的名称  后续会使用APP。商品不多  预估就几十款",
+        "author": ""
+      }
+    ],
+    "251239": [
+      {
+        "time": "2026-06-17 16:16",
+        "content": "商品资料已经录入的差不多了！小程序目前在申请中。",
         "author": ""
       }
     ]
@@ -47456,5 +47463,5 @@
       }
     ]
   },
-  "_syncTime": 1781680552531
+  "_syncTime": 1781689697424
 }
