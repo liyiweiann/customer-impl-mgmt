@@ -1714,7 +1714,7 @@ function deleteProgress(idx) {
 // 1. 开通≤2天 → 准备阶段
 // 2. 开通≥3天，商品=0 → 异常（红）
 // 3. 开通≥3天且<5天，商品>0 → 搭建中（蓝）
-// 4. 开通≥5天，当天-前一天>0 → 搭建中（蓝）；≤0 → 异常（红）
+// 4. 开通≥5天，当天-前一天≠0 → 搭建中（蓝）；=0 → 异常（红）
 // 5. ≥5天无前一天数据时，回退规则2/3
 // 返回: { label, color, cell(HTML), detail(简短说明) }
 function judgeProgressV2(item) {
@@ -1727,7 +1727,7 @@ function judgeProgressV2(item) {
   var label, color;
   if (days <= 2) { label = '准备阶段'; color = '#8899aa'; }
   else if (days >= 5 && diff != null) {
-    if (diff > 0) { label = '搭建中'; color = '#FF8A5C'; }
+    if (diff !== 0) { label = '搭建中'; color = '#FF8A5C'; }
     else { label = '异常'; color = '#ff4d4f'; }
   }
   else { // ≥3天 且 (<5天 或 无前一天数据)
