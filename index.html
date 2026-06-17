@@ -1,0 +1,2761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客户实施管理系统</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --shadow-xs: 0 1px 2px 0 rgba(0,0,0,0.3);
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.3);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+  --font-sans: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 15px; --text-lg: 17px; --text-xl: 20px;
+}
+body { font-family: var(--font-sans); background: #0c1321; color: #e0e6ed; height: 100vh; overflow: hidden; font-size: var(--text-base); }
+
+/* 布局 */
+.app-container { display: flex; height: 100vh; }
+
+/* 左侧菜单 */
+.sidebar { width: 230px; background: linear-gradient(180deg, #001529 0%, #001a33 100%); color: #fff; display: flex; flex-direction: column; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.05); }
+.sidebar-header { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.sidebar-header h1 { font-size: var(--text-lg); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.5px; }
+.sidebar-header .subtitle { font-size: var(--text-xs); color: rgba(255,255,255,0.35); margin-top: 4px; letter-spacing: 0.5px; }
+.sidebar-menu { flex: 1; padding: 8px 0; overflow-y: auto; }
+.menu-item { display: flex; align-items: center; padding: 12px 20px; cursor: pointer; transition: all 0.2s ease; color: rgba(255,255,255,0.55); font-size: var(--text-base); border-left: 3px solid transparent; margin: 1px 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.menu-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+.menu-item.active { color: #fff; background: rgba(255,107,64,0.12); border-left-color: #FF6B40; font-weight: 500; }
+.menu-item .icon { width: 22px; height: 22px; margin-right: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+
+/* 右侧内容区 */
+.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #0f1724; }
+.content-header { background: rgba(20,30,48,0.95); backdrop-filter: blur(8px); padding: 20px 28px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: space-between; }
+.content-header h2 { font-size: var(--text-xl); font-weight: 600; color: #fff; letter-spacing: 0.3px; }
+.content-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+/* 页面容器 */
+.page { display: none; height: 100%; }
+.page.active { display: flex; flex-direction: column; }
+
+/* ===== 统计卡片 ===== */
+.stat-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; margin-bottom: 28px; }
+.stat-card { background: linear-gradient(135deg, #1a2744 0%, #1e3050 100%); border-radius: var(--radius-md); padding: 22px 20px; border: 1px solid rgba(255,255,255,0.05); box-shadow: var(--shadow-xs); transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.stat-card .stat-label { font-size: 13px; color: #8899aa; margin-bottom: 10px; font-weight: 500; }
+.stat-card .stat-value { font-size: 36px; font-weight: 600; line-height: 1; letter-spacing: -0.5px; }
+.stat-card .stat-sub { font-size: 12px; color: #667788; margin-top: 10px; }
+.stat-card .stat-year-row { display: flex; gap: 20px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+.stat-card .stat-year-item { font-size: 14px; color: #8899aa; }
+.stat-card .stat-year-item span { font-weight: 600; margin-left: 4px; font-size: 18px; }
+.stat-card.card-total .stat-value { color: #FF8A5C; }
+.stat-card.card-online .stat-value { color: #52c41a; }
+.stat-card.card-offline .stat-value { color: #fa8c16; }
+.stat-card.card-rate .stat-value { color: #FF6B40; }
+.stat-card.card-warning .stat-value { color: #ff4d4f; }
+
+/* ===== 看板 ===== */
+.kanban-toolbar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+.kanban-toolbar select, .kanban-toolbar input { padding: 7px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); font-size: var(--text-sm); outline: none; background: #1a2744; color: #e0e6ed; transition: border-color 0.2s; }
+.kanban-toolbar select:focus, .kanban-toolbar input:focus { border-color: #FF6B40; box-shadow: 0 0 0 3px rgba(255,107,64,0.12); }
+.kanban-toolbar select option { background: #1a2744; }
+.kanban-board { display: flex; gap: 18px; flex: 1; overflow-x: auto; padding-bottom: 16px; }
+.kanban-column { min-width: 320px; max-width: 360px; background: #141e30; border-radius: var(--radius-md); display: flex; flex-direction: column; max-height: 100%; border: 1px solid rgba(255,255,255,0.05); box-shadow: var(--shadow-xs); }
+.kanban-column-header { padding: 14px 18px; font-weight: 600; font-size: var(--text-md); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.06); color: #ccc; }
+.kanban-column-header .count { background: #FF6B40; color: #fff; border-radius: var(--radius-sm); padding: 2px 10px; font-size: var(--text-xs); font-weight: 600; }
+.kanban-column-body { flex: 1; overflow-y: auto; padding: 10px; }
+.kanban-card { background: #1a2744; border-radius: var(--radius-sm); padding: 14px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: all 0.2s ease; }
+.kanban-card:hover { border-color: rgba(255,107,64,0.4); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.kanban-card .card-title { font-size: var(--text-base); font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; color: #e0e6ed; }
+.kanban-card .card-title .version-tag { font-size: 11px; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 500; }
+.kanban-card .card-info { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--text-sm); color: #8899aa; }
+.kanban-card .card-info span { white-space: nowrap; }
+.kanban-card .card-progress { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.kanban-card .progress-tag { font-size: var(--text-xs); padding: 3px 8px; border-radius: var(--radius-sm); }
+.kanban-card .card-latest { margin-top: 10px; font-size: var(--text-sm); color: #8899aa; line-height: 1.6; border-top: 1px dashed rgba(255,255,255,0.06); padding-top: 8px; }
+.tag-standard { background: rgba(235,47,150,0.12); color: #f759ab; border: 1px solid rgba(235,47,150,0.25); }
+.tag-flagship { background: rgba(212,177,6,0.12); color: #ffc53d; border: 1px solid rgba(212,177,6,0.25); }
+.tag-pro { background: rgba(19,194,194,0.12); color: #5cdbd3; border: 1px solid rgba(19,194,194,0.25); }
+
+/* ===== 客户管理 - 是否上线标签 ===== */
+.tag-online-cell { display: inline-block; padding: 3px 12px; border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.tag-cell-green { background: rgba(82,196,26,0.15); color: #52c41a; border: 1px solid rgba(82,196,26,0.3); }
+.tag-cell-red { background: rgba(255,77,79,0.15); color: #ff4d4f; border: 1px solid rgba(255,77,79,0.3); }
+.tag-cell-blue { background: rgba(255,107,64,0.15); color: #FF8A5C; border: 1px solid rgba(255,107,64,0.3); }
+.tag-progress-red { background: rgba(255,77,79,0.15); color: #ff4d4f; border: 1px solid rgba(255,77,79,0.3); }
+.tag-progress-orange { background: rgba(250,140,22,0.15); color: #fa8c16; border: 1px solid rgba(250,140,22,0.3); }
+.tag-progress-yellow { background: rgba(250,219,20,0.12); color: #d4b106; border: 1px solid rgba(250,219,20,0.25); }
+.tag-progress-normal { background: rgba(82,196,26,0.1); color: #73d13d; border: 1px solid rgba(82,196,26,0.25); }
+
+/* ===== 客户管理 - 实施阶段标签 ===== */
+.stage-tag { display: inline-block; padding: 3px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+
+/* ===== 客户管理 - 进度说明标签 ===== */
+.progress-tag-cell { display: block; margin-bottom: 3px; padding: 3px 10px; border-radius: 8px; font-size: 13px; white-space: nowrap; width: fit-content; }
+
+/* ===== 客户管理 ===== */
+.customer-toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+.customer-toolbar select, .customer-toolbar input { padding: 7px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); font-size: var(--text-sm); outline: none; background: #1a2744; color: #e0e6ed; transition: border-color 0.2s; }
+.customer-toolbar select:focus, .customer-toolbar input:focus { border-color: #FF6B40; box-shadow: 0 0 0 3px rgba(255,107,64,0.12); }
+.customer-toolbar select option { background: #1a2744; }
+.btn { padding: 8px 16px; height: 32px; border: 1px solid rgba(255,255,255,0.12); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); font-weight: 500; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px; background: transparent; color: #c0c8d0; }
+.btn:hover { border-color: rgba(255,255,255,0.25); color: #e0e6ed; }
+.btn-primary { background: linear-gradient(135deg, #FF6B40, #FFA474); color: #fff; border: none; }
+.btn-primary:hover { box-shadow: 0 4px 16px rgba(255,107,64,0.4); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); filter: brightness(0.92); }
+.btn-danger { color: #ff4d4f; border-color: rgba(255,77,79,0.4); }
+.btn-danger:hover { background: #ff4d4f; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,77,79,0.3); }
+.btn-danger:active { transform: translateY(0); }
+.btn-link { border: none; color: #FF8A5C; background: none; padding: 0 6px; font-weight: 500; }
+.btn-link:hover { color: #FFA474; }
+.btn-link.danger { color: #ff7875; }
+.btn-link.danger:hover { color: #ffa39e; }
+.btn-success { background: #52c41a; color: #fff; border-color: #52c41a; }
+.btn-success:hover { background: #73d13d; border-color: #73d13d; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(82,196,26,0.3); }
+.btn-success:active { transform: translateY(0); }
+
+.table-container { background: #141e30; border-radius: var(--radius-md); overflow: hidden; border: 1px solid rgba(255,255,255,0.05); box-shadow: var(--shadow-xs); }
+table { width: 100%; border-collapse: collapse; table-layout: auto; }
+table th, table td { white-space: nowrap; }
+thead th { background: rgba(26,39,68,0.8); backdrop-filter: blur(4px); padding: 12px 14px; text-align: left; font-size: var(--text-xs); font-weight: 600; color: #8899aa; border-bottom: 1px solid rgba(255,255,255,0.08); white-space: nowrap; position: sticky; top: 0; z-index: 1; letter-spacing: 0.3px; text-transform: uppercase; }
+thead th.col-fixed-right { position: sticky; right: 0; z-index: 2; background: rgba(26,39,68,0.95); }
+tbody td { padding: 11px 14px; font-size: var(--text-sm); border-bottom: 1px solid rgba(255,255,255,0.03); color: #c0c8d0; }
+tbody td.col-fixed-right { position: sticky; right: 0; z-index: 1; background: #141e30; border-left: 1px solid rgba(255,255,255,0.05); }
+tbody tr:hover td { background: rgba(255,107,64,0.04); }
+tbody tr:hover td.col-fixed-right { background: #1a2744; }
+/* 公司名称列 — 向左滑动固定 */
+thead th.col-fixed-left { position: sticky; left: 0; z-index: 2; background: rgba(26,39,68,0.95); }
+tbody td.col-fixed-left { position: sticky; left: 0; z-index: 1; background: #141e30; border-right: 1px solid rgba(255,255,255,0.08); }
+tbody tr:hover td.col-fixed-left { background: #1a2744; }
+tbody tr:last-child td { border-bottom: none; }
+.table-scroll { overflow-x: auto; max-height: calc(100vh - 220px); }
+#page-partner-rate table td { text-align: center; white-space: normal; min-width: 70px; line-height: 1.6; }
+#page-partner-rate table td:first-child { text-align: left; min-width: 120px; }
+#page-partner-rate table td:nth-child(2) { text-align: left; min-width: 140px; }
+.progress-desc-cell { white-space: normal !important; line-height: 1.7; min-width: 100px; overflow: visible !important; }
+.pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: rgba(26,39,68,0.6); backdrop-filter: blur(4px); border-top: 1px solid rgba(255,255,255,0.06); font-size: var(--text-sm); color: #8899aa; }
+.pagination-buttons { display: flex; gap: 6px; }
+.pagination-buttons .btn { min-width: 34px; justify-content: center; padding: 6px 10px; }
+.pagination-buttons .btn.active { background: #FF6B40; color: #fff; border-color: #FF6B40; }
+.pagination-buttons .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ===== 弹窗 ===== */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.modal-overlay.show { display: flex; }
+.modal { background: #141e30; border-radius: var(--radius-md); width: 720px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,0.06); }
+.modal-header { padding: 18px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: space-between; }
+.modal-header h3 { font-size: var(--text-lg); color: #fff; font-weight: 600; }
+.modal-close { cursor: pointer; font-size: 22px; color: #667788; background: none; border: none; transition: color 0.2s; }
+.modal-close:hover { color: #fff; }
+.modal-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
+.modal-footer { padding: 14px 28px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: flex-end; gap: 10px; }
+
+/* 表单 */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
+.form-group { display: flex; flex-direction: column; }
+.form-group.full-width { grid-column: 1 / -1; }
+.form-group label { font-size: var(--text-sm); color: #8899aa; margin-bottom: 6px; font-weight: 500; }
+.form-group label .required { color: #ff4d4f; margin-left: 2px; }
+.form-group input, .form-group select, .form-group textarea { padding: 9px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); font-size: var(--text-base); outline: none; transition: border-color 0.2s, box-shadow 0.2s; background: #1a2744; color: #e0e6ed; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #FF6B40; box-shadow: 0 0 0 3px rgba(255,107,64,0.12); }
+.form-group textarea { min-height: 64px; resize: vertical; }
+.form-group select option { background: #1a2744; }
+.form-group .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.form-group .checkbox-group label { display: inline-flex; align-items: center; gap: 4px; font-weight: normal; margin-bottom: 0; cursor: pointer; color: #c0c8d0; font-size: 13px; }
+.form-group .checkbox-group input[type="checkbox"] { margin: 0; width: 15px; height: 15px; accent-color: #FF6B40; cursor: pointer; flex-shrink: 0; }
+
+/* ===== 基础数据管理 ===== */
+.settings-container { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.settings-card { background: #141e30; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.05); box-shadow: var(--shadow-xs); }
+.settings-card-header { padding: 18px 22px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; }
+.settings-card-header h3 { font-size: 16px; font-weight: 600; color: #e0e6ed; }
+.settings-card-body { padding: 18px 22px; }
+.settings-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.settings-item:last-child { border-bottom: none; }
+.settings-item .item-left { display: flex; align-items: center; gap: 10px; }
+.settings-item .item-name { font-size: 14px; color: #c0c8d0; }
+.settings-item .item-color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); flex-shrink: 0; }
+.settings-item .item-actions { display: flex; gap: 6px; align-items: center; }
+.inline-form { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; }
+.inline-form input { flex: 1; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); font-size: var(--text-base); outline: none; background: #1a2744; color: #e0e6ed; }
+.inline-form input:focus { border-color: #FF6B40; box-shadow: 0 0 0 3px rgba(255,107,64,0.12); }
+.color-picker-wrap { display: flex; align-items: center; gap: 6px; }
+.color-picker-wrap label { font-size: 13px; color: #8899aa; white-space: nowrap; font-weight: 500; }
+.color-picker-wrap input[type="color"] { width: 32px; height: 32px; padding: 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; background: none; }
+.color-picker-wrap input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+.color-picker-wrap input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
+
+/* 确认弹窗 */
+.confirm-modal .modal { width: 420px; }
+.confirm-content { text-align: center; padding: 24px 0; font-size: 15px; color: #c0c8d0; }
+.confirm-content .icon-warn { font-size: 44px; color: #faad14; margin-bottom: 14px; }
+
+/* ===== 进度记录 ===== */
+.progress-timeline { max-height: 320px; overflow-y: auto; margin-top: 10px; }
+.timeline-item { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.timeline-item:last-child { border-bottom: none; }
+.timeline-time { font-size: 12px; color: #667788; white-space: nowrap; min-width: 130px; padding-top: 3px; font-weight: 500; }
+.timeline-content { flex: 1; font-size: 14px; color: #c0c8d0; line-height: 1.6; }
+.timeline-content .timeline-author { font-size: 12px; color: #FF8A5C; margin-top: 4px; }
+.progress-input-area { display: flex; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+.progress-input-area textarea { flex: 1; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); font-size: var(--text-base); outline: none; background: #1a2744; color: #e0e6ed; min-height: 40px; resize: none; }
+.progress-input-area textarea:focus { border-color: #FF6B40; box-shadow: 0 0 0 3px rgba(255,107,64,0.12); }
+.progress-input-area .btn { white-space: nowrap; align-self: flex-end; }
+
+/* 滚动条美化 */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* 底部上传按钮 */
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 8px; }
+.upload-btn { width: 100%; padding: 10px 16px; background: rgba(255,107,64,0.1); color: #FF8A5C; border: 1px dashed rgba(255,107,64,0.3); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-base); font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.upload-btn:hover { background: rgba(255,107,64,0.2); border-color: #FF6B40; color: #FFA474; transform: translateY(-1px); }
+.upload-btn.success { background: rgba(82,196,26,0.15); color: #52c41a; border-color: rgba(82,196,26,0.4); }
+.backup-btn-row { display: flex; gap: 6px; }
+.backup-btn { flex: 1; padding: 9px 6px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.25s; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid; }
+.backup-btn.export { background: rgba(82,196,26,0.1); color: #73d13d; border-color: rgba(82,196,26,0.3); }
+.backup-btn.export:hover { background: rgba(82,196,26,0.2); border-color: #52c41a; }
+.backup-btn.import { background: rgba(250,173,20,0.1); color: #faad14; border-color: rgba(250,173,20,0.3); }
+.backup-btn.import:hover { background: rgba(250,173,20,0.2); border-color: #faad14; }
+
+/* 导入结果提示 */
+.import-toast { position: fixed; top: 24px; right: 24px; padding: 14px 20px; border-radius: var(--radius-sm); font-size: var(--text-base); z-index: 2000; display: none; animation: slideIn 0.3s ease; box-shadow: var(--shadow-md); backdrop-filter: blur(8px); }
+.import-toast.show { display: block; }
+.import-toast.success { background: #1a3a1a; color: #52c41a; border: 1px solid rgba(82,196,26,0.3); }
+.import-toast.error { background: #3a1a1a; color: #ff4d4f; border: 1px solid rgba(255,77,79,0.3); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ===== 上线率分析 ===== */
+.or-qbtn { padding:6px 12px; border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); color:#8899aa; font-size:var(--text-xs); cursor:pointer; transition:all 0.2s; font-weight:500; }
+.or-qbtn:hover, .or-qbtn.active { background:rgba(255,107,64,0.18); color:#FF8A5C; border-color:rgba(255,107,64,0.4); }
+.or-rate-bar-wrap { display:flex; align-items:center; gap:10px; }
+.or-rate-bar-bg { flex:1; height:8px; background:rgba(255,255,255,0.08); border-radius:8px; overflow:hidden; min-width:80px; }
+.or-rate-bar-fill { height:100%; border-radius:8px; transition:width 0.5s; }
+/* 数据穿透弹窗 */
+.or-drill-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:3000; display:flex; align-items:center; justify-content:center; animation:fadeIn 0.2s; }
+.or-drill-modal { background:#141e30; border-radius:12px; border:1px solid rgba(255,255,255,0.06); width:94%; max-width:1200px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,0.5); }
+.or-drill-header { padding:16px 24px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; justify-content:space-between; align-items:center; }
+.or-drill-close { width:32px; height:32px; border-radius:8px; border:none; background:rgba(255,255,255,0.06); color:#8899aa; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.or-drill-close:hover { background:rgba(255,77,79,0.15); color:#ff4d4f; }
+.or-drill-body { padding:20px 24px; overflow-y:auto; }
+.or-drill-count { font-size:13px; color:#667788; margin-bottom:14px; }
+.or-badge-click { cursor:pointer; border-radius:8px; padding:1px 4px; transition:all 0.15s; display:inline-block; }
+.or-badge-click:hover { filter:brightness(1.3); outline:1px solid rgba(255,255,255,0.25); }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+/* 快照对比上传 */
+.snap-modal { background:#141e30; border-radius:12px; border:1px solid rgba(255,255,255,0.08); width:440px; padding:24px; }
+.snap-file-row { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.snap-file-row label { font-size:13px; color:#c0c8d0; min-width:80px; }
+.snap-file-row input[type=file] { flex:1; color:#8899aa; }
+.snap-result { margin-top:14px; padding:12px; border-radius:8px; font-size:13px; line-height:1.6; }
+.snap-result.ok { background:rgba(82,196,26,0.08); color:#52c41a; border:1px solid rgba(82,196,26,0.2); }
+.snap-result.err { background:rgba(255,77,79,0.08); color:#ff4d4f; border:1px solid rgba(255,77,79,0.2); }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- 左侧菜单 -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>📋 客户实施管理</h1>
+      <div class="subtitle">Implementation Management</div>
+    </div>
+    <div class="sidebar-menu">
+      <div class="menu-item active" data-page="kanban" onclick="switchPage('kanban')">
+        <span class="icon">📊</span> 客户实施看板
+      </div>
+      <div class="menu-item" data-page="customer" onclick="switchPage('customer')">
+        <span class="icon">👥</span> 客户管理
+      </div>
+      <div class="menu-item" data-page="settings" onclick="switchPage('settings')">
+        <span class="icon">⚙️</span> 基础数据管理
+      </div>
+      <div class="menu-item" data-page="partner" onclick="switchPage('partner')">
+        <span class="icon">🤝</span> 合作伙伴客户
+      </div>
+      <div class="menu-item" data-page="partner-rate" onclick="switchPage('partner-rate')">
+        <span class="icon">📈</span> 合作伙伴上线率
+      </div>
+      <div class="menu-item" data-page="online-rate" onclick="switchPage('online-rate')">
+        <span class="icon">📊</span> 上线率分析
+      </div>
+      <div class="menu-item" data-page="followup" onclick="switchPage('followup')">
+        <span class="icon">🔔</span> 今日跟进客户
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <input type="file" id="excel-upload" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(event)">
+      <button class="upload-btn" onclick="document.getElementById('excel-upload').click()">📁 导入Excel数据</button>
+      <div class="backup-btn-row">
+        <button class="backup-btn export" onclick="backupData()">💾 备份数据</button>
+        <button class="backup-btn import" onclick="document.getElementById('backup-upload').click()">📂 恢复备份</button>
+      </div>
+      <input type="file" id="backup-upload" accept=".json" style="display:none;" onchange="restoreData(event)">
+    </div>
+  </div>
+
+  <!-- 右侧内容区 -->
+  <div class="main-content">
+    <!-- ===== 看板页 ===== -->
+    <div class="page active" id="page-kanban">
+      <div class="content-header">
+        <h2>📊 客户实施看板</h2>
+      </div>
+      <div class="content-body">
+        <div class="stat-cards" id="stat-cards"></div>
+        <div class="kanban-toolbar">
+          <select id="kanban-filter-month" onchange="renderKanban()"></select>
+          <select id="kanban-filter-version" onchange="renderKanban()">
+            <option value="">全部版本</option>
+          </select>
+          <select id="kanban-filter-online" onchange="renderKanban()">
+            <option value="">全部上线状态</option>
+            <option value="已上线">已上线</option>
+            <option value="未上线">未上线</option>
+          </select>
+          <select id="kanban-filter-location" onchange="renderKanban()">
+            <option value="">全部区域</option>
+            <option value="本地">本地</option>
+            <option value="外地">外地</option>
+          </select>
+          <select id="kanban-filter-cs" onchange="renderKanban()">
+            <option value="">全部客服</option>
+          </select>
+          <input type="text" id="kanban-search" placeholder="搜索公司名称/ID" oninput="renderKanban()">
+        </div>
+        <div class="kanban-board" id="kanban-board"></div>
+      </div>
+    </div>
+
+    <!-- ===== 客户管理页 ===== -->
+    <div class="page" id="page-customer">
+      <div class="content-header">
+        <h2>👥 客户管理</h2>
+        <button class="btn btn-primary" onclick="openCustomerModal()">+ 新增客户</button>
+      </div>
+      <div class="content-body">
+        <div class="customer-toolbar">
+          <select id="cust-filter-month" onchange="renderCustomerTable()"></select>
+          <select id="cust-filter-version" onchange="renderCustomerTable()">
+            <option value="">全部版本</option>
+          </select>
+          <select id="cust-filter-stage" onchange="renderCustomerTable()">
+            <option value="">全部实施阶段</option>
+          </select>
+          <select id="cust-filter-online" onchange="renderCustomerTable()">
+            <option value="">全部上线状态</option>
+            <option value="已上线">已上线</option>
+            <option value="未上线">未上线</option>
+          </select>
+          <select id="cust-filter-progress" onchange="renderCustomerTable()">
+            <option value="">全部实施进度</option>
+            <option value="已上线">已上线</option>
+            <option value="准备阶段">准备阶段</option>
+            <option value="搭建中">搭建中</option>
+            <option value="异常">异常</option>
+          </select>
+          <input type="text" id="cust-search" placeholder="搜索公司名称/ID" oninput="renderCustomerTable()">
+          <button class="btn btn-primary" onclick="openSnapshotModal()" style="margin-left:auto;">📊 快照对比</button>
+          <button class="btn btn-primary" onclick="exportExcel()">📥 导出Excel</button>
+        </div>
+        <div class="table-container">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th class="col-fixed-left">公司名称</th>
+                  <th>开通时间</th>
+                  <th>累计订单</th>
+                  <th>是否上线</th>
+                  <th>进度说明</th>
+                  <th>实施进度判定</th>
+                  <th>实施阶段</th>
+                  <th>系统版本</th>
+                  <th>活跃等级</th>
+                  <th>客服</th>
+                  <th>到期时间</th>
+                  <th>行业</th>
+                  <th>行业均上线天</th>
+                  <th class="col-fixed-right" style="width:130px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="customer-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="customer-pagination"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 基础数据管理页 ===== -->
+    <div class="page" id="page-settings">
+      <div class="content-header">
+        <h2>⚙️ 基础数据管理</h2>
+      </div>
+      <div class="content-body">
+        <div class="settings-container">
+          <div class="settings-card">
+            <div class="settings-card-header"><h3>实施阶段维护</h3></div>
+            <div class="settings-card-body">
+              <div class="inline-form">
+                <input type="text" id="new-stage" placeholder="输入新增的实施阶段" onkeydown="if(event.key==='Enter')addStage()">
+                <div class="color-picker-wrap">
+                  <label>字体颜色</label>
+                  <input type="color" id="new-stage-color" value="#FF8A5C">
+                </div>
+                <button class="btn btn-primary" onclick="addStage()">添加</button>
+              </div>
+              <div id="stage-list"></div>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-card-header"><h3>进度说明维护</h3></div>
+            <div class="settings-card-body">
+              <div class="inline-form">
+                <input type="text" id="new-progress" placeholder="输入新增的进度说明" onkeydown="if(event.key==='Enter')addProgress()">
+                <div class="color-picker-wrap">
+                  <label>背景色</label>
+                  <input type="color" id="new-progress-color" value="#13c2c2">
+                </div>
+                <button class="btn btn-primary" onclick="addProgress()">添加</button>
+              </div>
+              <div id="progress-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 合作伙伴客户页 ===== -->
+    <div class="page" id="page-partner">
+      <div class="content-header">
+        <h2>🤝 合作伙伴客户</h2>
+        <div style="font-size:13px;color:#8899aa;">渠道运营 & 渠道代理客户数据，独立统计</div>
+      </div>
+      <div class="content-body">
+        <div class="stat-cards" id="partner-stat-cards"></div>
+        <div class="customer-toolbar">
+          <input type="text" id="partner-filter-source-channel" placeholder="搜索来源渠道" oninput="renderPartnerTable()">
+          <select id="partner-filter-status" onchange="renderPartnerTable()">
+            <option value="">全部状态</option>
+            <option value="已上线">已上线</option>
+            <option value="未上线">未上线</option>
+          </select>
+          <select id="partner-filter-progress" onchange="renderPartnerTable()">
+            <option value="">全部实施进度</option>
+            <option value="已上线">已上线</option>
+            <option value="准备阶段">准备阶段</option>
+            <option value="搭建中">搭建中</option>
+            <option value="异常">异常</option>
+          </select>
+          <input type="date" id="partner-filter-start-date" onchange="renderPartnerTable()" title="开通时间起始">
+          <span style="color:#556677;font-size:13px;">至</span>
+          <input type="date" id="partner-filter-end-date" onchange="renderPartnerTable()" title="开通时间截止">
+          <select id="partner-filter-proxy" onchange="renderPartnerTable()">
+            <option value="">代实施：全部</option>
+            <option value="yes">是</option>
+            <option value="no">否</option>
+          </select>
+          <select id="partner-filter-version" onchange="renderPartnerTable()">
+            <option value="">全部版本</option>
+          </select>
+          <input type="text" id="partner-search" placeholder="搜索公司名称/ID" oninput="renderPartnerTable()">
+          <button class="btn btn-primary" onclick="openSnapshotModal()">📊 快照对比</button>
+        </div>
+        <div class="table-container">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th class="col-fixed-left">公司名称</th>
+                  <th>来源渠道</th>
+                  <th>行业</th>
+                  <th>行业均上线天</th>
+                  <th>系统版本</th>
+                  <th>开通时间</th>
+                  <th>开通天数</th>
+                  <th>商品总数</th>
+                  <th>累计订单</th>
+                  <th>下游客户总数</th>
+                  <th>下单客户</th>
+                  <th>是否上线</th>
+                  <th>实施进度判定</th>
+                  <th>代实施</th>
+                </tr>
+              </thead>
+              <tbody id="partner-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="partner-pagination"></div>
+        </div>
+      </div>
+    </div>
+    <!-- ===== 上线率分析页 ===== -->
+    <div class="page" id="page-online-rate">
+      <div class="content-header">
+        <h2>📊 上线率分析</h2>
+      </div>
+      <div class="content-body">
+        <!-- 筛选栏 -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px;">
+          <select id="or-year" onchange="orOnYearChange()" style="background:#1a2744;color:#e0e6ed;border:1px solid rgba(255,255,255,0.12);padding:7px 12px;border-radius:8px;font-size:13px;">
+            <option value="">全部年份</option>
+          </select>
+          <select id="or-month" onchange="renderOnlineRate()" style="background:#1a2744;color:#e0e6ed;border:1px solid rgba(255,255,255,0.12);padding:7px 12px;border-radius:8px;font-size:13px;">
+            <option value="">全部月份</option>
+            <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+            <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+            <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+          <input type="date" id="or-from" title="开通时间-起" onchange="orClearQuick();renderOnlineRate()" style="background:#1a2744;color:#e0e6ed;border:1px solid rgba(255,255,255,0.12);padding:7px 12px;border-radius:8px;font-size:13px;">
+          <span style="color:#556677;">至</span>
+          <input type="date" id="or-to" title="开通时间-止" onchange="orClearQuick();renderOnlineRate()" style="background:#1a2744;color:#e0e6ed;border:1px solid rgba(255,255,255,0.12);padding:7px 12px;border-radius:8px;font-size:13px;">
+          <!-- 快捷筛选 -->
+          <button id="orq-lastyear" class="or-qbtn" onclick="orQuick('lastyear')">去年</button>
+          <button id="orq-q1" class="or-qbtn" onclick="orQuick('q1')">Q1</button>
+          <button id="orq-q2" class="or-qbtn" onclick="orQuick('q2')">Q2</button>
+          <button id="orq-q3" class="or-qbtn" onclick="orQuick('q3')">Q3</button>
+          <button id="orq-q4" class="or-qbtn" onclick="orQuick('q4')">Q4</button>
+          <button id="orq-half6" class="or-qbtn" onclick="orQuick('half6')">近半年</button>
+          <button id="orq-thisyear" class="or-qbtn" onclick="orQuick('thisyear')">今年</button>
+          <button class="or-qbtn" onclick="orQuick('clear')">全部</button>
+        </div>
+        <!-- 总体概览卡片 -->
+        <div id="or-overview" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;"></div>
+        <!-- 渠道类型上线率 -->
+        <div style="background:#141e30;border-radius:12px;border:1px solid rgba(255,255,255,0.05);margin-bottom:16px;">
+          <div style="padding:14px 20px;font-size:15px;font-weight:600;color:#c0c8d0;border-bottom:1px solid rgba(255,255,255,0.06);">按渠道类型统计</div>
+          <div style="padding:16px 20px;" id="or-channel-type"></div>
+        </div>
+        <!-- 来源渠道上线率 -->
+        <div style="background:#141e30;border-radius:12px;border:1px solid rgba(255,255,255,0.05);">
+          <div style="padding:14px 20px;font-size:15px;font-weight:600;color:#c0c8d0;border-bottom:1px solid rgba(255,255,255,0.06);">按来源渠道统计</div>
+          <div class="table-scroll" style="max-height:420px;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="background:#1a2744;padding:10px 14px;text-align:left;font-size:13px;font-weight:600;color:#8899aa;white-space:nowrap;">来源渠道</th>
+                  <th style="background:#1a2744;padding:10px 14px;text-align:center;font-size:13px;font-weight:600;color:#8899aa;">客户总数</th>
+                  <th style="background:#1a2744;padding:10px 14px;text-align:center;font-size:13px;font-weight:600;color:#8899aa;">已上线</th>
+                  <th style="background:#1a2744;padding:10px 14px;text-align:center;font-size:13px;font-weight:600;color:#8899aa;">未上线</th>
+                  <th style="background:#1a2744;padding:10px 14px;text-align:center;font-size:13px;font-weight:600;color:#8899aa;">上线率</th>
+                </tr>
+              </thead>
+              <tbody id="or-source-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 今日跟进客户页 ===== -->
+    <div class="page" id="page-followup">
+      <div class="content-header">
+        <h2>🔔 今日跟进客户</h2>
+        <div style="font-size:13px;color:#8899aa;">新开通客户 开通第2/4/7天 跟进提醒（节假日顺延）</div>
+      </div>
+      <div class="content-body">
+        <div class="stat-cards" id="fu-stat-cards"></div>
+        <div class="table-container">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>公司名称</th>
+                  <th>行业</th>
+                  <th>开通时间</th>
+                  <th>已开通天数</th>
+                  <th>商品总数</th>
+                  <th>客户总数</th>
+                  <th>跟进次数</th>
+                  <th>提醒内容</th>
+                </tr>
+              </thead>
+              <tbody id="fu-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 合作伙伴客户上线率页 ===== -->
+    <div class="page" id="page-partner-rate">
+      <div class="content-header">
+        <h2>📈 合作伙伴客户上线率</h2>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <select id="partner-rate-year" onchange="renderPartnerRateTable()" style="background:#1a2744;color:#e0e6ed;border:1px solid rgba(255,255,255,0.1);padding:6px 12px;border-radius:8px;font-size:13px;">
+            <option value="2026">2026年</option>
+            <option value="2025">2025年</option>
+          </select>
+        </div>
+      </div>
+      <div class="content-body">
+        <div class="table-container">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>来源渠道</th>
+                  <th>新开客户总数</th>
+                  <th>1月</th><th>2月</th><th>3月</th><th>4月</th><th>5月</th><th>6月</th>
+                  <th>7月</th><th>8月</th><th>9月</th><th>10月</th><th>11月</th><th>12月</th>
+                </tr>
+              </thead>
+              <tbody id="partner-rate-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="import-toast" id="import-toast"></div>
+
+<!-- 客户新增/编辑弹窗 -->
+<div class="modal-overlay" id="customer-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">新增客户</h3>
+      <button class="modal-close" onclick="closeCustomerModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>公司ID <span class="required">*</span></label>
+          <input type="number" id="f-companyId" placeholder="请输入公司ID">
+        </div>
+        <div class="form-group">
+          <label>公司名称 <span class="required">*</span></label>
+          <input type="text" id="f-companyName" placeholder="请输入公司名称">
+        </div>
+        <div class="form-group">
+          <label>系统版本 <span class="required">*</span></label>
+          <select id="f-version"></select>
+        </div>
+        <div class="form-group">
+          <label>活跃等级</label>
+          <select id="f-activeLevel"></select>
+        </div>
+        <div class="form-group">
+          <label>商品总数</label>
+          <input type="number" id="f-productCount" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>预估商品总数</label>
+          <input type="number" id="f-estimatedProductCount" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>上线时间</label>
+          <input type="date" id="f-onlineDate">
+        </div>
+        <div class="form-group">
+          <label>累计订单</label>
+          <input type="number" id="f-orderCount" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>累计订单金额</label>
+          <input type="number" id="f-orderAmount" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>行业</label>
+          <input type="text" id="f-industry" placeholder="请输入行业">
+        </div>
+        <div class="form-group">
+          <label>客服</label>
+          <input type="text" id="f-csStaff" placeholder="请输入客服">
+        </div>
+        <div class="form-group">
+          <label>开通时间</label>
+          <input type="date" id="f-startDate">
+        </div>
+        <div class="form-group">
+          <label>到期时间</label>
+          <input type="date" id="f-endDate">
+        </div>
+        <div class="form-group">
+          <label>已启用客户总数</label>
+          <input type="number" id="f-enabledCustomers" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>下单客户总数</label>
+          <input type="number" id="f-orderCustomers" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>是否上线 <span class="required">*</span></label>
+          <select id="f-online">
+            <option value="">请选择</option>
+            <option value="已上线">已上线</option>
+            <option value="未上线">未上线</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>本地/外地</label>
+          <select id="f-location">
+            <option value="">请选择</option>
+            <option value="本地">本地</option>
+            <option value="外地">外地</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>实施阶段 <span class="required">*</span></label>
+          <select id="f-stage"></select>
+        </div>
+        <div class="form-group full-width">
+          <label>进度说明（多选）</label>
+          <div class="checkbox-group" id="f-progress"></div>
+        </div>
+        <div class="form-group full-width">
+          <label>最新进度</label>
+          <textarea id="f-latestProgress" placeholder="请输入最新进度说明"></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label>未使用分析</label>
+          <textarea id="f-unusedAnalysis" placeholder="请输入未使用分析"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCustomerModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveCustomer()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 进度记录弹窗 -->
+<div class="modal-overlay" id="progress-modal">
+  <div class="modal" style="width:600px;">
+    <div class="modal-header">
+      <h3 id="progress-modal-title">实施进度记录</h3>
+      <button class="modal-close" onclick="closeProgressModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="progress-timeline" class="progress-timeline"></div>
+      <div class="progress-input-area">
+        <textarea id="new-progress-input" placeholder="填写本次实施进度..."></textarea>
+        <button class="btn btn-primary" onclick="addProgressRecord()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 确认弹窗 -->
+<div class="modal-overlay confirm-modal" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>确认操作</h3>
+      <button class="modal-close" onclick="closeConfirm()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="confirm-content">
+        <div class="icon-warn">⚠️</div>
+        <div id="confirm-message"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfirm()">取消</button>
+      <button class="btn btn-primary" id="confirm-btn" onclick="executeConfirm()">确定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== 数据存储 ==========
+const STORAGE_KEY = 'impl_mgmt_data';
+
+function getDefaultData() {
+  return {
+    stages: [
+      {name: '实施中', color: '#FF6B40'},
+      {name: '实施完成', color: '#52c41a'}
+    ],
+    progressOptions: [
+      {name: '首次培训', bgColor: '#FF6B40'},
+      {name: '二次培训', bgColor: '#722ed1'},
+      {name: '资料建立', bgColor: '#13c2c2'},
+      {name: '小程序申请', bgColor: '#eb2f96'},
+      {name: '支付申请', bgColor: '#fa8c16'},
+      {name: 'ERP对接', bgColor: '#faad14'},
+      {name: '已上线使用', bgColor: '#52c41a'}
+    ],
+    versions: ['标准版', '新专业版', '旗舰版', '餐饮版', '联营版', '餐饮连锁版', '生鲜版'],
+    activeLevels: ['0', '1~5', '6~10', '11~15', '16~20', '21~25', '26~30'],
+    customers: [],
+    progressRecords: {},
+    partners: []
+  };
+}
+
+// 兼容旧数据：字符串数组 → 对象数组
+function migrateData(data) {
+  let migrated = false;
+  if (data.stages && data.stages.length > 0 && typeof data.stages[0] === 'string') {
+    data.stages = data.stages.map((s, i) => ({name: s, color: ['#FF6B40','#52c41a','#fa8c16','#ff4d4f','#722ed1','#13c2c2','#eb2f96','#faad14','#FF8A5C','#ffc53d'][i % 10]}));
+    migrated = true;
+  }
+  if (data.progressOptions && data.progressOptions.length > 0 && typeof data.progressOptions[0] === 'string') {
+    const defaultColors = ['#FF6B40','#722ed1','#13c2c2','#eb2f96','#fa8c16','#faad14','#52c41a','#ff4d4f','#FF8A5C','#5cdbd3','#f759ab','#ffc53d'];
+    data.progressOptions = data.progressOptions.map((p, i) => ({name: p, bgColor: defaultColors[i % defaultColors.length]}));
+    migrated = true;
+  }
+  // 补充新增的系统版本（保留已有版本，追加缺失的）
+  const defaultVersions = getDefaultData().versions;
+  if (data.versions) {
+    defaultVersions.forEach(v => { if (!data.versions.includes(v)) { data.versions.push(v); migrated = true; } });
+  } else {
+    data.versions = defaultVersions;
+    migrated = true;
+  }
+  return migrated;
+}
+
+function loadData() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) { const data = JSON.parse(raw); if (migrateData(data)) saveData(data); return data; } } catch(e) {}
+  return getDefaultData();
+}
+function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+// ========== 备份 / 恢复 ==========
+function backupData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) { showImportToast('暂无数据可备份', 'error'); return; }
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const filename = `impl_backup_${ts}.json`;
+    const blob = new Blob([raw], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    showImportToast('✅ 备份已下载：' + filename, 'success');
+  } catch(e) { showImportToast('备份失败：' + e.message, 'error'); }
+}
+function restoreData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.customers && !data.partners) { showImportToast('文件格式不正确，请选择备份的 JSON 文件', 'error'); return; }
+      if (!confirm(`确认恢复备份？\n直销客户：${(data.customers||[]).length} 条\n合作伙伴：${(data.partners||[]).length} 条\n\n⚠️ 当前数据将被覆盖！`)) return;
+      saveData(data);
+      appData = data;
+      renderKanban();
+      showImportToast('✅ 数据恢复成功', 'success');
+    } catch(e) { showImportToast('恢复失败：文件解析错误', 'error'); }
+  };
+  reader.readAsText(file);
+}
+
+// ========== 快照对比上传 ==========
+function openSnapshotModal() {
+  document.getElementById('snap-today').value = '';
+  document.getElementById('snap-yesterday').value = '';
+  document.getElementById('snap-today-name').textContent = '';
+  document.getElementById('snap-yesterday-name').textContent = '';
+  document.getElementById('snap-result').innerHTML = '';
+  document.getElementById('snapshot-modal').classList.add('show');
+}
+function closeSnapshotModal() { document.getElementById('snapshot-modal').classList.remove('show'); }
+function snapFileName(idx) {
+  var id = idx === 0 ? 'snap-today' : 'snap-yesterday';
+  var nameId = idx === 0 ? 'snap-today-name' : 'snap-yesterday-name';
+  var f = document.getElementById(id).files[0];
+  document.getElementById(nameId).textContent = f ? f.name : '';
+}
+
+function doSnapshotCompare() {
+  var todayFile = document.getElementById('snap-today').files[0];
+  var yesterdayFile = document.getElementById('snap-yesterday').files[0];
+  if (!todayFile || !yesterdayFile) {
+    document.getElementById('snap-result').innerHTML = '<div class="snap-result err">请选择当天和前一天两份数据文件</div>';
+    return;
+  }
+  var resultDiv = document.getElementById('snap-result');
+  resultDiv.innerHTML = '<div style="color:#8899aa;font-size:13px;">正在处理...</div>';
+
+  // 读取当天文件
+  var readerT = new FileReader();
+  readerT.onload = function(e) {
+    var dataT = new Uint8Array(e.target.result);
+    var wbT = XLSX.read(dataT, { type: 'array' });
+    var rowsT = XLSX.utils.sheet_to_json(wbT.Sheets[wbT.SheetNames[0]], { header: 1 });
+    if (rowsT.length < 2) { resultDiv.innerHTML = '<div class="snap-result err">当天文件无数据</div>'; return; }
+    var hT = rowsT[0].map(function(h) { return String(h).trim(); });
+    var cIdT = -1, cPcT = -1;
+    for (var i = 0; i < hT.length; i++) {
+      if (hT[i] === '公司ID') cIdT = i;
+      if (hT[i] === '商品总数') cPcT = i;
+    }
+    if (cIdT === -1 || cPcT === -1) { resultDiv.innerHTML = '<div class="snap-result err">当天文件缺少"公司ID"或"商品总数"列</div>'; return; }
+    var todayMap = {};
+    for (var i = 1; i < rowsT.length; i++) {
+      var r = rowsT[i]; if (!r[cIdT]) continue;
+      todayMap[Number(r[cIdT])] = Number(r[cPcT]) || 0;
+    }
+
+    // 读取前一天文件
+    var readerY = new FileReader();
+    readerY.onload = function(e2) {
+      var dataY = new Uint8Array(e2.target.result);
+      var wbY = XLSX.read(dataY, { type: 'array' });
+      var rowsY = XLSX.utils.sheet_to_json(wbY.Sheets[wbY.SheetNames[0]], { header: 1 });
+      if (rowsY.length < 2) { resultDiv.innerHTML = '<div class="snap-result err">前一天文件无数据</div>'; return; }
+      var hY = rowsY[0].map(function(h) { return String(h).trim(); });
+      var cIdY = -1, cPcY = -1;
+      for (var i = 0; i < hY.length; i++) {
+        if (hY[i] === '公司ID') cIdY = i;
+        if (hY[i] === '商品总数') cPcY = i;
+      }
+      if (cIdY === -1 || cPcY === -1) { resultDiv.innerHTML = '<div class="snap-result err">前一天文件缺少"公司ID"或"商品总数"列</div>'; return; }
+      var prevMap = {};
+      for (var i = 1; i < rowsY.length; i++) {
+        var r = rowsY[i]; if (!r[cIdY]) continue;
+        prevMap[Number(r[cIdY])] = Number(r[cPcY]) || 0;
+      }
+
+      // 对比并更新
+      var today = new Date().toISOString().substring(0, 10);
+      var custUpdated = 0, partnerUpdated = 0;
+      // 客户
+      (appData.customers || []).forEach(function(c) {
+        if (c.companyId in todayMap) c.productCount = todayMap[c.companyId];
+        if (c.companyId in prevMap) { c.prevProductCount = prevMap[c.companyId]; c.snapshotDate = today; custUpdated++; }
+      });
+      // 合作伙伴
+      (appData.partners || []).forEach(function(p) {
+        if (p.companyId in todayMap) p.productCount = todayMap[p.companyId];
+        if (p.companyId in prevMap) { p.prevProductCount = prevMap[p.companyId]; p.snapshotDate = today; partnerUpdated++; }
+      });
+      saveData(appData);
+      resultDiv.innerHTML = '<div class="snap-result ok">对比完成！更新客户 ' + custUpdated + ' 条，合作伙伴 ' + partnerUpdated + ' 条<br>快照日期：' + today + '</div>';
+      // 刷新当前页面
+      var activePage = document.querySelector('.page.active');
+      if (activePage) {
+        if (activePage.id === 'page-customer') renderCustomerTable();
+        else if (activePage.id === 'page-partner') { renderPartnerStatCards(); renderPartnerTable(); }
+        else if (activePage.id === 'page-partner-rate') renderPartnerRateTable();
+        else if (activePage.id === 'page-online-rate') renderOnlineRate();
+      }
+    };
+    readerY.readAsArrayBuffer(yesterdayFile);
+  };
+  readerT.readAsArrayBuffer(todayFile);
+}
+
+let appData = loadData();
+
+// ========== 页面切换 ==========
+function switchPage(page) {
+  document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.menu-item[data-page="${page}"]`).classList.add('active');
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  if (page === 'kanban') renderKanban();
+  if (page === 'customer') renderCustomerTable();
+  if (page === 'settings') renderSettings();
+  if (page === 'partner') { renderPartnerStatCards(); renderPartnerTable(); }
+  if (page === 'partner-rate') renderPartnerRateTable();
+  if (page === 'online-rate') renderOnlineRate();
+  if (page === 'followup') renderFollowUp();
+}
+
+// ========== 看板统计 + 卡片 ==========
+function renderStatCards() {
+  const all = appData.customers.filter(c => !c.proxyImplementation);
+  const total = all.length;
+  const online = all.filter(c => c.online === '已上线').length;
+  const offline = all.filter(c => c.online === '未上线').length;
+  const rate = total > 0 ? (online / total * 100).toFixed(1) : '0.0';
+  const warning = all.filter(c => judgeCustomerV2Progress(c).label === '异常');
+  const warningCount = warning.length;
+
+  // 按年份统计
+  const y2026 = all.filter(c => c.startDate && c.startDate.startsWith('2026'));
+  const y2025 = all.filter(c => c.startDate && c.startDate.startsWith('2025'));
+  const y2026Online = y2026.filter(c => c.online === '已上线').length;
+  const y2025Online = y2025.filter(c => c.online === '已上线').length;
+  const y2026Offline = y2026.filter(c => c.online === '未上线').length;
+  const y2025Offline = y2025.filter(c => c.online === '未上线').length;
+  const y2026Warning = y2026.filter(c => judgeCustomerV2Progress(c).label === '异常').length;
+  const y2025Warning = y2025.filter(c => judgeCustomerV2Progress(c).label === '异常').length;
+  const y2026Rate = y2026.length > 0 ? (y2026Online / y2026.length * 100).toFixed(1) : '0.0';
+  const y2025Rate = y2025.length > 0 ? (y2025Online / y2025.length * 100).toFixed(1) : '0.0';
+
+  document.getElementById('stat-cards').innerHTML = `
+    <div class="stat-card card-total">
+      <div class="stat-label">客户总数</div>
+      <div class="stat-value">${total}</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#FF8A5C;">${y2026.length}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#FF8A5C;">${y2025.length}</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-online">
+      <div class="stat-label">已上线客户</div>
+      <div class="stat-value">${online}</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#52c41a;">${y2026Online}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#52c41a;">${y2025Online}</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-offline">
+      <div class="stat-label">未上线客户</div>
+      <div class="stat-value">${offline}</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#fa8c16;">${y2026Offline}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#fa8c16;">${y2025Offline}</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-rate">
+      <div class="stat-label">上线率</div>
+      <div class="stat-value">${rate}%</div>
+      <div class="stat-sub">已上线 / 客户总数</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#FF6B40;">${y2026Rate}%</span></div>
+        <div class="stat-year-item">2025年<span style="color:#FF6B40;">${y2025Rate}%</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-warning">
+      <div class="stat-label">预警客户</div>
+      <div class="stat-value">${warningCount}</div>
+      <div class="stat-sub">实施进度异常</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#ff4d4f;">${y2026Warning}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#ff4d4f;">${y2025Warning}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderKanban() {
+  renderStatCards();
+  fillMonthSelect('kanban-filter-month', '2026');
+  fillSelect('kanban-filter-version', appData.versions, '全部版本');
+  fillSelect('kanban-filter-cs', [...new Set(appData.customers.map(c => c.csStaff).filter(Boolean))], '全部客服');
+
+  const f = getKanbanFilters();
+  const filtered = appData.customers.filter(c => {
+    if (c.proxyImplementation) return false;
+    if (f.month && c.startDate) { const v = f.month; if (v.length === 4 && c.startDate.substring(0, 4) !== v) return false; if (v.length === 7 && c.startDate.substring(0, 7) !== v) return false; }
+    if (f.version && c.version !== f.version) return false;
+    if (f.online && c.online !== f.online) return false;
+    if (f.location && c.location !== f.location) return false;
+    if (f.cs && c.csStaff !== f.cs) return false;
+    if (f.search) { const s = f.search.toLowerCase(); if (!c.companyName.toLowerCase().includes(s) && !String(c.companyId).includes(s)) return false; }
+    return true;
+  });
+
+  const stageNames = getStageNames();
+  const groups = {};
+  stageNames.forEach(s => groups[s] = []);
+  filtered.forEach(c => { const st = c.stage || '未分类'; if (!groups[st]) groups[st] = []; groups[st].push(c); });
+
+  // 「未实施」列改为显示2026年异常客户
+  if ('未实施' in groups) groups['未实施'] = filtered.filter(c => c.startDate && c.startDate.startsWith('2026') && judgeCustomerV2Progress(c).label === '异常');
+
+  const board = document.getElementById('kanban-board');
+  board.innerHTML = '';
+  Object.keys(groups).forEach(stage => {
+    const color = getStageColor(stage);
+    const col = document.createElement('div');
+    col.className = 'kanban-column';
+    col.innerHTML = `<div class="kanban-column-header" style="border-bottom-color:${color};"><span style="color:${color};">${stage === '未实施' ? '预警客户' : stage}</span><span class="count">${groups[stage].length}</span></div><div class="kanban-column-body">${groups[stage].map(c => renderKanbanCard(c)).join('')}</div>`;
+    board.appendChild(col);
+  });
+}
+
+function renderKanbanCard(c) {
+  const vc = c.version === '旗舰版' ? 'tag-flagship' : c.version === '新专业版' ? 'tag-pro' : 'tag-standard';
+  const pts = (c.progressDesc || []).map(p => { const bg = getProgressBgColor(p); return `<span class="progress-tag" style="background:${hexToRgba(bg,0.15)};color:${bg};border:1px solid ${hexToRgba(bg,0.3)};">${p}</span>`; }).join('');
+  return `<div class="kanban-card" onclick="viewCustomerFromKanban(${c.companyId})"><div class="card-title"><span>${c.companyName}</span><span class="version-tag ${vc}">${c.version || ''}</span></div><div class="card-info"><span>开通: ${c.startDate || '-'}</span></div>${pts ? `<div class="card-progress">${pts}</div>` : ''}${c.latestProgress ? `<div class="card-latest">📌 ${c.latestProgress}</div>` : ''}</div>`;
+}
+
+function getKanbanFilters() {
+  return { month: document.getElementById('kanban-filter-month').value, version: document.getElementById('kanban-filter-version').value, online: document.getElementById('kanban-filter-online').value, location: document.getElementById('kanban-filter-location').value, cs: document.getElementById('kanban-filter-cs').value, search: document.getElementById('kanban-search').value.trim() };
+}
+
+function viewCustomerFromKanban(companyId) {
+  switchPage('customer');
+  const c = appData.customers.find(c => c.companyId === companyId);
+  if (c) openCustomerModal(c);
+}
+
+// ========== 客户管理 ==========
+const PAGE_SIZE = 10;
+let currentPage = 1;
+
+// 按行业计算平均上线天数（统计基准：2025年开通 + 有上线时间的客户，取customers+partners合并统计）
+function buildIndustryAvgDays() {
+  var map = {}; // { industry: { total: days, count: n } }
+  var all = (appData.customers || []).concat(appData.partners || []);
+  all.forEach(function(c) {
+    if (!c.startDate || !c.onlineDate) return;
+    if (String(c.startDate).substring(0, 4) !== '2025') return;
+    var s = new Date(c.startDate), e = new Date(c.onlineDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+    var days = Math.round((e - s) / (1000 * 60 * 60 * 24));
+    if (days < 0) return;
+    var ind = c.industry || '未知';
+    if (!map[ind]) map[ind] = { total: 0, count: 0 };
+    map[ind].total += days;
+    map[ind].count++;
+  });
+  var result = {};
+  Object.keys(map).forEach(function(ind) {
+    result[ind] = Math.round(map[ind].total / map[ind].count);
+  });
+  return result;
+}
+
+function renderCustomerTable() {
+  fillMonthSelect('cust-filter-month', '2026');
+  fillSelect('cust-filter-version', appData.versions, '全部版本');
+  fillSelect('cust-filter-stage', appData.stages, '全部实施阶段');
+  const month = document.getElementById('cust-filter-month').value;
+  const version = document.getElementById('cust-filter-version').value;
+  const stage = document.getElementById('cust-filter-stage').value;
+  const online = document.getElementById('cust-filter-online').value;
+  const progressFilter = document.getElementById('cust-filter-progress').value;
+  const search = document.getElementById('cust-search').value.trim().toLowerCase();
+  let filtered = appData.customers.filter(c => {
+    if (month && c.startDate) { if (month.length === 4 && c.startDate.substring(0, 4) !== month) return false; if (month.length === 7 && c.startDate.substring(0, 7) !== month) return false; }
+    if (version && c.version !== version) return false;
+    if (stage && c.stage !== stage) return false;
+    if (online && c.online !== online) return false;
+    if (progressFilter && judgeCustomerV2Progress(c).label !== progressFilter) return false;
+    if (search && !c.companyName.toLowerCase().includes(search) && !String(c.companyId).includes(search)) return false;
+    return true;
+  });
+  // 按开通时间降序排列（最新优先）
+  filtered.sort((a, b) => {
+    if (!a.startDate && !b.startDate) return 0;
+    if (!a.startDate) return 1;
+    if (!b.startDate) return -1;
+    return b.startDate.localeCompare(a.startDate);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageData = filtered.slice(start, start + PAGE_SIZE);
+
+  const tbody = document.getElementById('customer-tbody');
+  const industryAvg = buildIndustryAvgDays();
+  tbody.innerHTML = pageData.map(c => {
+    const recordCount = (appData.progressRecords[c.companyId] || []).length;
+    const progressHtml = (c.progressDesc && c.progressDesc.length > 0) ? c.progressDesc.map(p => { const bg = getProgressBgColor(p); return `<span class="progress-tag-cell" style="background:${hexToRgba(bg,0.12)};color:${bg};border-color:${hexToRgba(bg,0.3)};">${p}</span>`; }).join('') : '-';
+    const stageColor = getStageColor(c.stage);
+    const stageHtml = c.stage ? `<span class="stage-tag" style="color:${stageColor};border:none;background:none;font-weight:500;">${c.stage}</span>` : '-';
+    const judge = judgeCustomerV2Progress(c);
+    const avgDays = c.industry && industryAvg[c.industry] != null ? industryAvg[c.industry] + '天' : '-';
+    return `<tr>
+      <td class="col-fixed-left" style="white-space:nowrap;" title="${c.companyName}">${c.companyName}</td>
+      <td>${c.startDate || '-'}</td>
+      <td style="text-align:center;">${c.orderCount != null ? c.orderCount : '-'}</td>
+      <td><span class="tag-online-cell ${c.online === '已上线' ? 'tag-cell-green' : 'tag-cell-red'}">${c.online || '-'}</span></td>
+      <td class="progress-desc-cell">${progressHtml}</td>
+      ${judge.cell}
+      <td>${stageHtml}</td>
+      <td>${c.version || '-'}</td>
+      <td>${c.activeLevel || '-'}</td>
+      <td>${c.csStaff || '-'}</td>
+      <td>${c.endDate || '-'}</td>
+      <td>${c.industry || '-'}</td>
+      <td style="text-align:center;color:#FF8A5C;font-weight:600;">${avgDays}</td>
+      <td class="col-fixed-right" style="white-space:nowrap;">
+        <button class="btn-link" onclick='openCustomerModal(${JSON.stringify(c).replace(/'/g,"&#39;")})'>编辑</button>
+        <button class="btn-link" onclick="openProgressModal(${c.companyId},'${c.companyName.replace(/'/g,"\\'")}')">进度<span style="color:#667788;">(${recordCount})</span></button>
+        <button class="btn-link danger" onclick="confirmDelete(${c.companyId})">删除</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const pag = document.getElementById('customer-pagination');
+  pag.innerHTML = `<span>共 ${filtered.length} 条记录</span><div class="pagination-buttons"><button class="btn" onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>&lt;</button>${buildPageButtons(currentPage, totalPages)}<button class="btn" onclick="goPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>&gt;</button></div>`;
+}
+
+function buildPageButtons(current, total) {
+  let html = ''; const range = 2;
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || (i >= current - range && i <= current + range)) html += `<button class="btn ${i === current ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+    else if (i === current - range - 1 || i === current + range + 1) html += '<span style="padding:0 4px;color:#667788;">...</span>';
+  }
+  return html;
+}
+function goPage(p) { currentPage = p; renderCustomerTable(); }
+
+// ========== 客户弹窗 ==========
+let editingCustomer = null;
+
+function toggleProgressCb(cb) {
+  const label = cb.closest('label');
+  if (cb.checked) {
+    const bg = label.dataset.bg;
+    label.style.background = hexToRgba(bg, 0.35);
+    label.style.borderColor = bg;
+    label.style.fontWeight = '600';
+  } else {
+    const bg = label.dataset.bg;
+    label.style.background = hexToRgba(bg, 0.12);
+    label.style.borderColor = hexToRgba(bg, 0.3);
+    label.style.fontWeight = 'normal';
+  }
+}
+
+// 【Bug修复】日期格式标准化：将各种日期格式转为YYYY-MM-DD，防止type="date"输入框无法识别
+function normalizeDateString(str) {
+  if (!str) return '';
+  str = String(str).trim();
+  // 已经是标准格式 YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // 格式 YYYY-M-D 或 YYYY-M-DD 或 YYYY-MM-D
+  const m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+  // 格式 YYYY/MM/DD 或 YYYY/M/D
+  const m2 = str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (m2) return m2[1] + '-' + m2[2].padStart(2, '0') + '-' + m2[3].padStart(2, '0');
+  // 格式 YYYYMMDD
+  const m3 = str.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m3) return m3[1] + '-' + m3[2] + '-' + m3[3];
+  // 其他格式，返回原始值（type="date"可能无法识别，但保留原值）
+  return str;
+}
+
+function openCustomerModal(customer) {
+  editingCustomer = customer ? {...customer, progressDesc: [...(customer.progressDesc || [])]} : null;
+  document.getElementById('modal-title').textContent = customer ? '编辑客户' : '新增客户';
+  fillSelect('f-version', appData.versions, '请选择');
+  fillSelect('f-activeLevel', appData.activeLevels, '请选择');
+  fillSelect('f-stage', appData.stages, '请选择');
+  const progressDiv = document.getElementById('f-progress');
+  progressDiv.innerHTML = appData.progressOptions.map(p => { const n = typeof p === 'object' ? p.name : p; const bg = typeof p === 'object' ? p.bgColor : '#13c2c2'; return `<label class="progress-cb-label" data-bg="${bg}" style="background:${hexToRgba(bg,0.12)};color:${bg};padding:2px 8px;border-radius:8px;border:1px solid ${hexToRgba(bg,0.3)};"><input type="checkbox" value="${n}" onchange="toggleProgressCb(this)"><span class="checkbox-label-text">${n}</span></label>`; }).join('');
+
+  if (customer) {
+    document.getElementById('f-companyId').value = customer.companyId || '';
+    document.getElementById('f-companyName').value = customer.companyName || '';
+    document.getElementById('f-version').value = customer.version || '';
+    document.getElementById('f-activeLevel').value = customer.activeLevel || '';
+    document.getElementById('f-productCount').value = customer.productCount || '';
+    document.getElementById('f-estimatedProductCount').value = customer.estimatedProductCount || '';
+    document.getElementById('f-orderCount').value = customer.orderCount || '';
+    document.getElementById('f-orderAmount').value = customer.orderAmount || '';
+    document.getElementById('f-industry').value = customer.industry || '';
+    document.getElementById('f-csStaff').value = customer.csStaff || '';
+    // 【Bug修复】确保日期格式为YYYY-MM-DD，防止type="date"输入框无法识别导致值被清空
+    const startDateVal = customer.startDate ? normalizeDateString(customer.startDate) : '';
+    const endDateVal = customer.endDate ? normalizeDateString(customer.endDate) : '';
+    const onlineDateVal = customer.onlineDate ? normalizeDateString(customer.onlineDate) : '';
+    document.getElementById('f-startDate').value = startDateVal;
+    document.getElementById('f-endDate').value = endDateVal;
+    document.getElementById('f-onlineDate').value = onlineDateVal;
+    document.getElementById('f-enabledCustomers').value = customer.enabledCustomers || '';
+    document.getElementById('f-orderCustomers').value = customer.orderCustomers || '';
+    document.getElementById('f-online').value = customer.online || '';
+    document.getElementById('f-location').value = customer.location || '';
+    document.getElementById('f-stage').value = customer.stage || '';
+    document.getElementById('f-latestProgress').value = customer.latestProgress || '';
+    document.getElementById('f-unusedAnalysis').value = customer.unusedAnalysis || '';
+    (customer.progressDesc || []).forEach(p => { const cb = progressDiv.querySelector(`input[value="${p}"]`); if (cb) { cb.checked = true; toggleProgressCb(cb); } });
+    document.getElementById('f-companyId').readOnly = true;
+  } else {
+    ['f-companyId','f-companyName','f-productCount','f-orderCount','f-orderAmount','f-industry','f-csStaff','f-startDate','f-endDate','f-enabledCustomers','f-orderCustomers','f-latestProgress','f-unusedAnalysis','f-estimatedProductCount','f-onlineDate'].forEach(id => document.getElementById(id).value = '');
+    ['f-version','f-activeLevel','f-online','f-location','f-stage'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-companyId').readOnly = false;
+  }
+  document.getElementById('customer-modal').classList.add('show');
+}
+
+function closeCustomerModal() { document.getElementById('customer-modal').classList.remove('show'); editingCustomer = null; }
+
+function saveCustomer() {
+  const companyId = document.getElementById('f-companyId').value.trim();
+  const companyName = document.getElementById('f-companyName').value.trim();
+  const version = document.getElementById('f-version').value;
+  const online = document.getElementById('f-online').value;
+  const stage = document.getElementById('f-stage').value;
+  if (!companyId) return alert('请输入公司ID');
+  if (!companyName) return alert('请输入公司名称');
+  if (!version) return alert('请选择系统版本');
+  if (!online) return alert('请选择是否上线');
+  if (!stage) return alert('请选择实施阶段');
+  const progressDesc = [];
+  document.querySelectorAll('#f-progress input[type="checkbox"]:checked').forEach(cb => progressDesc.push(cb.value));
+  // 【关键修复】编辑时：先拷贝原客户所有字段（保留channel/sourceChannel等非表单字段），再覆盖表单字段
+  let obj;
+  if (editingCustomer) {
+    obj = { ...editingCustomer };
+    obj.companyId = Number(companyId);
+    obj.companyName = companyName;
+    obj.version = version;
+    obj.activeLevel = document.getElementById('f-activeLevel').value;
+    obj.productCount = Number(document.getElementById('f-productCount').value) || 0;
+    obj.estimatedProductCount = Number(document.getElementById('f-estimatedProductCount').value) || 0;
+    obj.orderCount = Number(document.getElementById('f-orderCount').value) || 0;
+    obj.orderAmount = Number(document.getElementById('f-orderAmount').value) || 0;
+    obj.industry = document.getElementById('f-industry').value.trim();
+    obj.csStaff = document.getElementById('f-csStaff').value.trim();
+    // 【Bug修复】type="date"输入框如果无法识别日期格式，.value会返回空字符串
+    // 此时保留原始值，防止startDate/endDate被意外清空导致客户从列表消失
+    const newStartDate = document.getElementById('f-startDate').value;
+    const newEndDate = document.getElementById('f-endDate').value;
+    obj.startDate = newStartDate || editingCustomer.startDate || '';
+    obj.endDate = newEndDate || editingCustomer.endDate || '';
+    obj.onlineDate = document.getElementById('f-onlineDate').value || editingCustomer.onlineDate || '';
+    obj.enabledCustomers = Number(document.getElementById('f-enabledCustomers').value) || 0;
+    obj.orderCustomers = Number(document.getElementById('f-orderCustomers').value) || 0;
+    obj.online = online;
+    obj.location = document.getElementById('f-location').value;
+    obj.stage = stage;
+    obj.progressDesc = progressDesc;
+    obj.latestProgress = document.getElementById('f-latestProgress').value.trim();
+    obj.unusedAnalysis = document.getElementById('f-unusedAnalysis').value.trim();
+  } else {
+    obj = { companyId: Number(companyId), companyName, channel: '', sourceChannel: '', version, activeLevel: document.getElementById('f-activeLevel').value, productCount: Number(document.getElementById('f-productCount').value) || 0, estimatedProductCount: Number(document.getElementById('f-estimatedProductCount').value) || 0, orderCount: Number(document.getElementById('f-orderCount').value) || 0, orderAmount: Number(document.getElementById('f-orderAmount').value) || 0, industry: document.getElementById('f-industry').value.trim(), csStaff: document.getElementById('f-csStaff').value.trim(), startDate: document.getElementById('f-startDate').value, endDate: document.getElementById('f-endDate').value, onlineDate: document.getElementById('f-onlineDate').value || '', enabledCustomers: Number(document.getElementById('f-enabledCustomers').value) || 0, orderCustomers: Number(document.getElementById('f-orderCustomers').value) || 0, online, location: document.getElementById('f-location').value, stage, progressDesc, latestProgress: document.getElementById('f-latestProgress').value.trim(), unusedAnalysis: document.getElementById('f-unusedAnalysis').value.trim() };
+  }
+  // 【Bug修复】使用宽松比较==而非===，防止companyId类型不一致（数字vs字符串）导致找不到
+  if (editingCustomer) { const idx = appData.customers.findIndex(c => c.companyId == editingCustomer.companyId); if (idx !== -1) { appData.customers[idx] = obj; console.log('[saveCustomer] updated idx=' + idx, 'companyId=' + obj.companyId, 'startDate=' + obj.startDate); } else { console.error('[saveCustomer] ERROR: cannot find companyId=' + editingCustomer.companyId + ' in customers!'); } }
+  else { if (appData.customers.some(c => c.companyId === obj.companyId)) return alert('公司ID已存在，请检查'); appData.customers.push(obj); }
+  // 同步最新进度到进度记录时间线
+  if (obj.latestProgress) {
+    const cid = obj.companyId;
+    if (!appData.progressRecords[cid]) appData.progressRecords[cid] = [];
+    const records = appData.progressRecords[cid];
+    const oldLatest = editingCustomer ? (editingCustomer.latestProgress || '') : '';
+    const needsSync = (obj.latestProgress !== oldLatest) || (records.length === 0) || (records[records.length - 1].content !== obj.latestProgress);
+    if (needsSync) {
+      const now = new Date();
+      const time = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      records.push({ time, content: obj.latestProgress, author: '' });
+    }
+  }
+  saveData(appData); closeCustomerModal(); renderCustomerTable(); renderKanban();
+}
+
+// ========== 进度记录 ==========
+let progressCustomerId = null;
+
+function openProgressModal(companyId, companyName) {
+  progressCustomerId = companyId;
+  document.getElementById('progress-modal-title').textContent = `实施进度记录 - ${companyName}`;
+  document.getElementById('new-progress-input').value = '';
+  renderProgressTimeline();
+  document.getElementById('progress-modal').classList.add('show');
+}
+
+function closeProgressModal() { document.getElementById('progress-modal').classList.remove('show'); progressCustomerId = null; }
+
+function renderProgressTimeline() {
+  const records = (appData.progressRecords[progressCustomerId] || []).sort((a, b) => new Date(b.time) - new Date(a.time));
+  const container = document.getElementById('progress-timeline');
+  if (records.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:#667788;padding:20px;">暂无进度记录</div>';
+    return;
+  }
+  container.innerHTML = records.map(r => `<div class="timeline-item"><div class="timeline-time">${r.time}</div><div class="timeline-content">${r.content}${r.author ? `<div class="timeline-author">- ${r.author}</div>` : ''}</div></div>`).join('');
+}
+
+function addProgressRecord() {
+  const input = document.getElementById('new-progress-input');
+  const content = input.value.trim();
+  if (!content) return;
+  if (!appData.progressRecords[progressCustomerId]) appData.progressRecords[progressCustomerId] = [];
+  const now = new Date();
+  const time = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  appData.progressRecords[progressCustomerId].push({ time, content, author: '' });
+  // 同步最新进度到客户数据
+  const customer = appData.customers.find(c => c.companyId === progressCustomerId);
+  if (customer) customer.latestProgress = content;
+  saveData(appData);
+  input.value = '';
+  renderProgressTimeline();
+  renderCustomerTable();
+  renderKanban();
+}
+
+// ========== 删除确认 ==========
+let confirmCallback = null;
+
+// ========== 导出Excel ==========
+function exportExcel() {
+  const headers = ['公司ID','公司名称','系统版本','活跃等级','产品数量','订单数量','订单金额','行业','客服','开通时间','到期时间','已启用客户总数','下单客户总数','是否上线','本地/外地','实施阶段','进度说明','最新进度','未使用分析'];
+  const keys = ['companyId','companyName','version','activeLevel','productCount','orderCount','orderAmount','industry','csStaff','startDate','endDate','enabledCustomers','orderCustomers','online','location','stage','progressDesc','latestProgress','unusedAnalysis'];
+  let csv = '\uFEFF'; // BOM for Excel中文兼容
+  csv += headers.join(',') + '\n';
+  appData.customers.forEach(c => {
+    const row = keys.map(k => {
+      let val = c[k];
+      if (k === 'progressDesc' && Array.isArray(val)) val = val.join('、');
+      if (val === undefined || val === null) val = '';
+      val = String(val).replace(/"/g, '""');
+      if (/[,\n\r"]/.test(val)) val = '"' + val + '"';
+      return val;
+    });
+    csv += row.join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  a.download = `客户数据_${dateStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function confirmDelete(companyId) {
+  const c = appData.customers.find(c => c.companyId === companyId);
+  document.getElementById('confirm-message').textContent = `确定要删除客户「${c ? c.companyName : companyId}」吗？此操作不可撤销。`;
+  confirmCallback = () => { appData.customers = appData.customers.filter(c => c.companyId !== companyId); delete appData.progressRecords[companyId]; saveData(appData); renderCustomerTable(); renderKanban(); };
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function closeConfirm() { document.getElementById('confirm-modal').classList.remove('show'); confirmCallback = null; }
+function executeConfirm() { if (confirmCallback) confirmCallback(); closeConfirm(); }
+
+// ========== 基础数据管理 ==========
+function renderSettings() { renderStageList(); renderProgressList(); }
+function renderStageList() {
+  document.getElementById('stage-list').innerHTML = appData.stages.map((s, i) => {
+    const name = typeof s === 'object' ? s.name : s;
+    const color = typeof s === 'object' ? s.color : '#FF8A5C';
+    return `<div class="settings-item"><div class="item-left"><span class="item-color-dot" style="background:${color};"></span><span class="item-name" style="color:${color};">${name}</span></div><div class="item-actions"><button class="btn-link" onclick="editStage(${i})">编辑</button><button class="btn-link danger" onclick="deleteStage(${i})">删除</button></div></div>`;
+  }).join('');
+}
+function renderProgressList() {
+  document.getElementById('progress-list').innerHTML = appData.progressOptions.map((p, i) => {
+    const name = typeof p === 'object' ? p.name : p;
+    const bgColor = typeof p === 'object' ? p.bgColor : '#13c2c2';
+    return `<div class="settings-item"><div class="item-left"><span class="item-color-dot" style="background:${bgColor};"></span><span class="item-name" style="color:${bgColor};">${name}</span></div><div class="item-actions"><button class="btn-link" onclick="editProgress(${i})">编辑</button><button class="btn-link danger" onclick="deleteProgress(${i})">删除</button></div></div>`;
+  }).join('');
+}
+
+function addStage() {
+  const input = document.getElementById('new-stage');
+  const colorInput = document.getElementById('new-stage-color');
+  const val = input.value.trim();
+  if (!val) return;
+  if (getStageNames().includes(val)) return alert('该实施阶段已存在');
+  appData.stages.push({name: val, color: colorInput.value});
+  saveData(appData); input.value = ''; renderStageList();
+}
+function editStage(idx) {
+  const s = appData.stages[idx];
+  const oldName = typeof s === 'object' ? s.name : s;
+  const oldColor = typeof s === 'object' ? s.color : '#FF8A5C';
+  const newName = prompt('修改实施阶段名称：', oldName);
+  if (newName === null || newName.trim() === '') return;
+  if (newName.trim() !== oldName && getStageNames().includes(newName.trim())) return alert('该实施阶段已存在');
+  const newColor = prompt('修改字体颜色（如 #ff4d4f）：', oldColor);
+  if (newColor === null || !newColor.trim()) return;
+  if (!/^#[0-9a-fA-F]{6}$/.test(newColor.trim())) return alert('颜色格式不正确，请输入如 #ff4d4f 的格式');
+  const nameChanged = newName.trim() !== oldName;
+  if (nameChanged) appData.customers.forEach(c => { if (c.stage === oldName) c.stage = newName.trim(); });
+  appData.stages[idx] = {name: newName.trim(), color: newColor.trim()};
+  saveData(appData); renderStageList();
+}
+function deleteStage(idx) {
+  const s = appData.stages[idx];
+  const name = typeof s === 'object' ? s.name : s;
+  if (appData.customers.some(c => c.stage === name)) return alert(`实施阶段「${name}」正在被客户使用，无法删除`);
+  document.getElementById('confirm-message').textContent = `确定要删除实施阶段「${name}」吗？`;
+  confirmCallback = () => { appData.stages.splice(idx, 1); saveData(appData); renderStageList(); };
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function addProgress() {
+  const input = document.getElementById('new-progress');
+  const colorInput = document.getElementById('new-progress-color');
+  const val = input.value.trim();
+  if (!val) return;
+  if (getProgressNames().includes(val)) return alert('该进度说明已存在');
+  appData.progressOptions.push({name: val, bgColor: colorInput.value});
+  saveData(appData); input.value = ''; renderProgressList();
+}
+function editProgress(idx) {
+  const p = appData.progressOptions[idx];
+  const oldName = typeof p === 'object' ? p.name : p;
+  const oldColor = typeof p === 'object' ? p.bgColor : '#13c2c2';
+  const newName = prompt('修改进度说明名称：', oldName);
+  if (newName === null || newName.trim() === '') return;
+  if (newName.trim() !== oldName && getProgressNames().includes(newName.trim())) return alert('该进度说明已存在');
+  const newColor = prompt('修改背景颜色（如 #ff4d4f）：', oldColor);
+  if (newColor === null || !newColor.trim()) return;
+  if (!/^#[0-9a-fA-F]{6}$/.test(newColor.trim())) return alert('颜色格式不正确，请输入如 #ff4d4f 的格式');
+  const nameChanged = newName.trim() !== oldName;
+  if (nameChanged) appData.customers.forEach(c => { if (c.progressDesc) { const pi = c.progressDesc.indexOf(oldName); if (pi !== -1) c.progressDesc[pi] = newName.trim(); } });
+  appData.progressOptions[idx] = {name: newName.trim(), bgColor: newColor.trim()};
+  saveData(appData); renderProgressList();
+}
+function deleteProgress(idx) {
+  const p = appData.progressOptions[idx];
+  const name = typeof p === 'object' ? p.name : p;
+  if (appData.customers.some(c => c.progressDesc && c.progressDesc.includes(name))) return alert(`进度说明「${name}」正在被客户使用，无法删除`);
+  document.getElementById('confirm-message').textContent = `确定要删除进度说明「${name}」吗？`;
+  confirmCallback = () => { appData.progressOptions.splice(idx, 1); saveData(appData); renderProgressList(); };
+  document.getElementById('confirm-modal').classList.add('show');
+}
+
+// ========== 工具函数 ==========
+
+// ========== 实施进度判定 V2（客户管理 + 合作伙伴通用） ==========
+// 规则：
+// 1. 开通≤2天 → 准备阶段
+// 2. 开通≥3天，商品=0 → 异常（红）
+// 3. 开通≥3天且<5天，商品>0 → 搭建中（蓝）
+// 4. 开通≥5天，当天-前一天>0 → 搭建中（蓝）；≤0 → 异常（红）
+// 5. ≥5天无前一天数据时，回退规则2/3
+// 返回: { label, color, cell(HTML), detail(简短说明) }
+function judgeProgressV2(item) {
+  if (!item || !item.startDate) return { label: '-', color: '#8899aa', cell: '<td style="color:#8899aa;">-</td>', detail: '' };
+  var now = new Date();
+  var days = Math.floor((now - new Date(item.startDate)) / (1000 * 60 * 60 * 24));
+  var pc = Number(item.productCount) || 0;
+  var prev = item.prevProductCount != null ? Number(item.prevProductCount) : null;
+  var diff = (prev != null) ? (pc - prev) : null;
+  var label, color;
+  if (days <= 2) { label = '准备阶段'; color = '#8899aa'; }
+  else if (days >= 5 && diff != null) {
+    if (diff > 0) { label = '搭建中'; color = '#FF8A5C'; }
+    else { label = '异常'; color = '#ff4d4f'; }
+  }
+  else { // ≥3天 且 (<5天 或 无前一天数据)
+    if (pc === 0) { label = '异常'; color = '#ff4d4f'; }
+    else { label = '搭建中'; color = '#FF8A5C'; }
+  }
+
+  // tooltip纯文本
+  var detailTxt = '当天:' + pc;
+  if (prev != null) { detailTxt += ' 前日:' + prev + ' ' + (diff >= 0 ? '+' : '') + diff; }
+  else { detailTxt += ' 前日:-'; }
+
+  // 美化详情: 各占一行，当天/前日异色，差值绿色涨橙色跌
+  var dHtml = '<div style="font-size:11px;margin-top:4px;line-height:1.7;">' +
+    '<div><span style="color:#FF8A5C;">当天</span> <span style="color:#e0e6ed;font-weight:600;">' + pc + '</span></div>';
+  if (prev != null) {
+    var diffColor = diff === 0 ? '#8899aa' : (diff > 0 ? '#52c41a' : '#fa8c16');
+    dHtml += '<div><span style="color:#8899aa;">前日</span> <span style="color:#c0c8d0;font-weight:600;">' + prev + '</span></div>' +
+      '<div style="padding-left:2px;"><span style="color:' + diffColor + ';font-weight:600;">' + (diff > 0 ? '+' : '') + diff + '</span></div>';
+  } else {
+    dHtml += '<div><span style="color:#8899aa;">前日</span> <span style="color:#667788;">-</span></div>';
+  }
+  dHtml += '</div>';
+
+  var cell = '<td><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-weight:600;font-size:13px;background:' + hexToRgba(color, 0.12) + ';color:' + color + ';border:1px solid ' + hexToRgba(color, 0.3) + ';" title="' + detailTxt + '">' + label + '</span>' + dHtml + '</td>';
+  return { label: label, color: color, cell: cell, detail: detailTxt };
+}
+
+// 客户实施进度判定（直接使用通用规则）
+function judgeCustomerV2Progress(c) {
+  if (c.online === '已上线') return { label: '已上线', color: '#52c41a', cell: '<td><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-weight:600;font-size:13px;background:rgba(82,196,26,0.12);color:#52c41a;border:1px solid rgba(82,196,26,0.3);">已上线</span></td>', detail: '已上线' };
+  return judgeProgressV2(c);
+}
+
+// 合作伙伴实施进度判定（≥30已上线 → 已上线，否则通用规则）
+function judgePartnerProgress(p) {
+  var onlineJudge = judgePartnerOnline(p);
+  if (onlineJudge.status === '已上线') {
+    return { level: 'normal', label: '已上线', reason: '已上线', cell: '<td><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-weight:600;font-size:13px;background:rgba(82,196,26,0.12);color:#52c41a;border:1px solid rgba(82,196,26,0.3);">已上线</span></td>' };
+  }
+  var v2 = judgeProgressV2(p);
+  // 兼容旧接口: level(用于CSS class), label, reason, cell
+  return { level: v2.label === '异常' ? 'warning' : 'normal', label: v2.label, reason: v2.detail, cell: v2.cell };
+}
+
+// ========== 合作伙伴上线判断 ==========
+function judgePartnerOnline(p) {
+  const orderCount = Number(p.orderCount) || 0;
+
+  let status, statusClass;
+  if (orderCount >= 30) { status = '已上线'; statusClass = 'tag-cell-green'; }
+  else { status = '未上线'; statusClass = 'tag-cell-red'; }
+
+  return { status, statusClass };
+}
+
+// 将hex颜色转为带透明度的rgba
+function hexToRgba(hex, alpha) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) hex = '#FF8A5C';
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ========== 工具 ==========
+function fillSelect(id, options, defaultLabel) { const sel = document.getElementById(id); const cv = sel.value; const ed = sel.querySelector('option[value=""]'); sel.innerHTML = ed ? `<option value="">${defaultLabel || ed.textContent}</option>` : ''; options.forEach(o => { const opt = document.createElement('option'); opt.value = typeof o === 'object' ? o.name : o; opt.textContent = typeof o === 'object' ? o.name : o; sel.appendChild(opt); }); if (cv) sel.value = cv; }
+
+// 获取实施阶段名称数组（兼容新旧格式）
+function getStageNames() { return appData.stages.map(s => typeof s === 'object' ? s.name : s); }
+// 获取进度说明名称数组（兼容新旧格式）
+function getProgressNames() { return appData.progressOptions.map(p => typeof p === 'object' ? p.name : p); }
+
+// 根据阶段名获取颜色配置
+function getStageColor(name) {
+  const s = appData.stages.find(s => (typeof s === 'object' ? s.name : s) === name);
+  return s && typeof s === 'object' ? s.color : '#FF8A5C';
+}
+
+// 根据进度说明名获取背景色配置
+function getProgressBgColor(name) {
+  const p = appData.progressOptions.find(p => (typeof p === 'object' ? p.name : p) === name);
+  return p && typeof p === 'object' ? p.bgColor : '#13c2c2';
+}
+
+// 动态生成年月选项，默认选中2026年（全部月份）
+function fillMonthSelect(id, defaultYear) {
+  const sel = document.getElementById(id);
+  const cv = sel.value;
+  sel.innerHTML = '<option value="">全部</option>';
+  const months = new Set();
+  appData.customers.forEach(c => { if (c.startDate && c.startDate.length >= 7) months.add(c.startDate.substring(0, 7)); });
+  const sorted = [...months].sort().reverse();
+  const years = {};
+  sorted.forEach(m => { const y = m.substring(0, 4); if (!years[y]) years[y] = []; years[y].push(m); });
+  Object.keys(years).sort().reverse().forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y + '年（全部）';
+    if (defaultYear && y === defaultYear) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  Object.keys(years).sort().reverse().forEach(y => {
+    years[y].forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      sel.appendChild(opt);
+    });
+  });
+  if (cv && sel.querySelector(`option[value="${cv}"]`)) sel.value = cv;
+  else if (defaultYear) sel.value = defaultYear;
+}
+
+
+function formatDate(d) { if (!d) return ''; d = normalizeDateString(String(d)); if (typeof d === 'string') return d.split('T')[0]; if (d instanceof Date) return d.toISOString().split('T')[0]; return String(d); }
+
+// ========== Excel上传解析（全量表40列适配） ==========
+function handleExcelUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+      if (rows.length < 2) {
+        showImportToast('Excel文件没有数据行', 'error');
+        return;
+      }
+
+      // 读取表头，建立列名→列索引的映射
+      const headers = rows[0].map(h => String(h).trim());
+      const colIdx = {};
+      headers.forEach((h, i) => { colIdx[h] = i; });
+
+      // 渠道列名兼容：优先 渠道描述 > 来源渠道
+      const channelColName = colIdx['渠道描述'] != null ? '渠道描述' : (colIdx['来源渠道'] != null ? '来源渠道' : null);
+
+      // 检查必要列是否存在
+      const missingCols = ['公司ID', '开通时间'].filter(c => !(c in colIdx));
+      if (!channelColName) missingCols.push('来源渠道/渠道描述');
+      if (missingCols.length > 0) {
+        showImportToast('缺少必要列：' + missingCols.join('、'), 'error');
+        return;
+      }
+
+      const idx_id = colIdx['公司ID'];
+      const idx_channel = colIdx[channelColName];
+      const idx_startDate = colIdx['开通时间'];
+
+      // 筛选：直销 → customers / 渠道运营+渠道代理 → partners，均为2025/2026年开通
+      const dataRows = [];
+      const partnerRows = [];
+      let skippedChannel = 0, skippedYear = 0;
+      const skippedChannels = new Set();
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r[idx_id]) continue;
+
+        const channel = String(r[idx_channel] || '').trim();
+        const startDateRaw = String(r[idx_startDate] || '').trim();
+        const startDate = normalizeDateString(startDateRaw);
+        const year = startDate.substring(0, 4);
+        if (year !== '2025' && year !== '2026') { skippedYear++; continue; }
+
+        // 渠道分类：直销→customers，渠道运营/渠道代理→partners
+        const isDirect = channel === '直销' || channel.includes('直销');
+        const isChannelOps = channel === '渠道运营' || channel.includes('渠道运营');
+        const isChannelAgent = channel === '渠道代理' || channel.includes('渠道代理');
+        if (!isDirect && !isChannelOps && !isChannelAgent) { skippedChannel++; skippedChannels.add(channel); continue; }
+
+        // 归一化渠道值
+        const channelValue = isDirect ? '直销' : (isChannelOps ? '渠道运营' : '渠道代理');
+
+        // 字段映射
+        const companyId = Number(r[idx_id]) || 0;
+        const orderCount = Number(r[colIdx['累计订单']] || 0);
+
+        // 通过公司ID匹配已有数据
+        const existCustomer = isDirect ? appData.customers.find(c => c.companyId === companyId) : null;
+        const existPartner = !isDirect ? (appData.partners || []).find(p => p.companyId === companyId) : null;
+        const excelCompanyName = colIdx['公司名称'] != null ? String(r[colIdx['公司名称']] || '').trim() : '';
+        // 公司名称：已有客户保留系统值，新增客户用Excel值
+        const companyName = (existCustomer ? existCustomer.companyName : '') || (existPartner ? existPartner.companyName : '') || excelCompanyName;
+
+        const row = {
+          companyId: companyId,
+          companyName: companyName,
+          channel: channelValue,
+          sourceChannel: colIdx['来源渠道'] != null ? String(r[colIdx['来源渠道']] || '').trim() : '',
+          version: colIdx['系统版本'] != null ? String(r[colIdx['系统版本']] || '') : '',
+          activeLevel: colIdx['活跃等级'] != null ? String(r[colIdx['活跃等级']] === 0 ? 0 : (r[colIdx['活跃等级']] || '')) : '',
+          productCount: colIdx['商品总数'] != null ? Number(r[colIdx['商品总数']]) || 0 : 0,
+          orderCount: orderCount,
+          orderAmount: colIdx['累计订单金额'] != null ? Number(r[colIdx['累计订单金额']]) || 0 : 0,
+          industry: colIdx['行业'] != null ? String(r[colIdx['行业']] || '') : '',
+          csStaff: colIdx['客服'] != null ? String(r[colIdx['客服']] || '') : '',
+          startDate: startDate.substring(0, 10),
+          endDate: colIdx['到期时间'] != null ? formatDate(r[colIdx['到期时间']]) : '',
+          enabledCustomers: colIdx['已启用客户总数'] != null ? Number(r[colIdx['已启用客户总数']]) || 0 : 0,
+          orderCustomers: colIdx['下单客户总数'] != null ? Number(r[colIdx['下单客户总数']]) || 0 : 0,
+          location: colIdx['省份'] != null ? String(r[colIdx['省份']] || '') : '',
+          onlineDate: colIdx['上线时间'] != null ? formatDate(r[colIdx['上线时间']]) : '',
+        };
+
+        if (isDirect) {
+          row.online = orderCount >= 30 ? '已上线' : '未上线';
+          row.stage = existCustomer ? existCustomer.stage : '';
+          row.progressDesc = existCustomer ? (existCustomer.progressDesc || []) : [];
+          row.latestProgress = existCustomer ? (existCustomer.latestProgress || '') : '';
+          row.unusedAnalysis = existCustomer ? (existCustomer.unusedAnalysis || '') : '';
+          dataRows.push(row);
+        } else {
+          partnerRows.push(row);
+        }
+      }
+
+      if (dataRows.length === 0 && partnerRows.length === 0) {
+        showImportToast('未解析到符合条件的客户（直销/渠道运营/渠道代理 + 2025/2026年开通）', 'error');
+        return;
+      }
+
+      // 直销：按公司ID合并（保留进度记录）
+      let updated = 0, added = 0;
+      dataRows.forEach(newRow => {
+        const existIdx = appData.customers.findIndex(c => c.companyId === newRow.companyId);
+        if (existIdx !== -1) {
+          const old = appData.customers[existIdx];
+          // 已有客户：公司名称保留系统值
+          newRow.companyName = old.companyName || newRow.companyName;
+          newRow.stage = old.stage || '';
+          newRow.progressDesc = old.progressDesc || [];
+          newRow.latestProgress = old.latestProgress || '';
+          newRow.unusedAnalysis = old.unusedAnalysis || '';
+          newRow.estimatedProductCount = old.estimatedProductCount || '';
+          newRow.onlineDate = old.onlineDate || newRow.onlineDate || '';
+          appData.customers[existIdx] = newRow;
+          updated++;
+        } else {
+          appData.customers.push(newRow);
+          added++;
+        }
+      });
+
+      // 合作伙伴：按公司ID合并
+      if (!appData.partners) appData.partners = [];
+      let pUpdated = 0, pAdded = 0;
+      partnerRows.forEach(newRow => {
+        newRow.proxyImplementation = newRow.proxyImplementation || false;
+        const existIdx = appData.partners.findIndex(p => p.companyId === newRow.companyId);
+        if (existIdx !== -1) {
+          const old = appData.partners[existIdx];
+          // 已有客户：公司名称保留系统值
+          newRow.companyName = old.companyName || newRow.companyName;
+          newRow.onlineDate = old.onlineDate || newRow.onlineDate || '';
+          newRow.proxyImplementation = old.proxyImplementation || false; // 保留手动设置的代实施标记
+          appData.partners[existIdx] = newRow;
+          pUpdated++;
+        } else {
+          appData.partners.push(newRow);
+          pAdded++;
+        }
+      });
+
+      // 记录合作伙伴每日快照（用于实施进度判定）
+      if (!appData.partnerDailySnapshots) appData.partnerDailySnapshots = {};
+      const today = new Date().toISOString().substring(0, 10);
+      partnerRows.forEach(row => {
+        const cid = row.companyId;
+        if (!appData.partnerDailySnapshots[cid]) appData.partnerDailySnapshots[cid] = [];
+        // 同一天只保留最后一次上传的快照
+        const existSnap = appData.partnerDailySnapshots[cid].find(s => s.date === today);
+        const snap = { date: today, productCount: row.productCount || 0, enabledCustomers: row.enabledCustomers || 0, orderCount: row.orderCount || 0 };
+        if (existSnap) {
+          Object.assign(existSnap, snap);
+        } else {
+          appData.partnerDailySnapshots[cid].push(snap);
+        }
+      });
+
+      const nonDirectCustomers = appData.customers.filter(c => c.channel && c.channel !== '直销' && !c.proxyImplementation);
+      if (nonDirectCustomers.length > 0) {
+        nonDirectCustomers.forEach(c => {
+          if (!appData.partners) appData.partners = [];
+          const existIdx = appData.partners.findIndex(p => p.companyId === c.companyId);
+          if (existIdx === -1) { c.proxyImplementation = c.proxyImplementation || false; appData.partners.push(c); }
+        });
+        const nonDirectIds = new Set(nonDirectCustomers.map(c => c.companyId));
+        appData.customers = appData.customers.filter(c => !nonDirectIds.has(c.companyId));
+      }
+
+      // 同步代实施客户数据（从最新合作伙伴数据更新）
+      appData.customers.filter(c => c.proxyImplementation).forEach(c => {
+        const p = (appData.partners || []).find(p => p.companyId == c.companyId);
+        if (p) {
+          c.companyName = p.companyName || c.companyName;
+          c.version = p.version || c.version;
+          c.industry = p.industry || c.industry;
+          c.startDate = p.startDate || c.startDate;
+          c.onlineDate = p.onlineDate || c.onlineDate;
+          c.online = (Number(p.orderCount) || 0) >= 30 ? '已上线' : '未上线';
+          c.orderCount = p.orderCount;
+          c.productCount = p.productCount;
+        }
+      });
+
+      saveData(appData);
+
+      // 更新按钮状态
+      const btn = document.querySelector('.upload-btn');
+      btn.textContent = '✅ 导入成功';
+      btn.classList.add('success');
+      setTimeout(() => { btn.innerHTML = '📁 导入Excel数据'; btn.classList.remove('success'); }, 2000);
+
+      let msg = `导入完成：直销 新增${added}条/更新${updated}条`;
+      if (pAdded > 0 || pUpdated > 0) msg += `，合作伙伴 新增${pAdded}条/更新${pUpdated}条`;
+      if (skippedChannel > 0) msg += `（跳过其他渠道${skippedChannel}条：${[...skippedChannels].join('、')}）`;
+      msg += `，非2025/2026年${skippedYear}条`;
+      showImportToast(msg, 'success');
+
+      // 刷新当前页面
+      renderKanban();
+      renderCustomerTable();
+      renderSettings();
+      renderPartnerStatCards();
+      renderPartnerTable();
+    } catch (err) {
+      showImportToast('解析失败：' + err.message, 'error');
+      console.error('Excel解析错误:', err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = '';
+}
+
+function showImportToast(message, type) {
+  const toast = document.getElementById('import-toast');
+  toast.textContent = message;
+  toast.className = 'import-toast show ' + type;
+  setTimeout(() => { toast.classList.remove('show'); }, 4000);
+}
+
+
+// ========== 合作伙伴客户 ==========
+const PARTNER_PAGE_SIZE = 15;
+let partnerCurrentPage = 1;
+
+// ========== 合作伙伴上线率统计 ==========
+function renderPartnerRateTable() {
+  const year = document.getElementById('partner-rate-year').value;
+  const all = appData.partners || [];
+  // 筛选当年开通的合作伙伴
+  const yearPartners = all.filter(p => p.startDate && p.startDate.startsWith(year));
+
+  // 按来源渠道分组
+  const channelMap = {};
+  yearPartners.forEach(p => {
+    const ch = p.sourceChannel || p.channel || '未知';
+    if (!channelMap[ch]) channelMap[ch] = [];
+    channelMap[ch].push(p);
+  });
+
+  // 按新开客户总数降序排序
+  const channels = Object.keys(channelMap).sort((a, b) => channelMap[b].length - channelMap[a].length);
+
+  const tbody = document.getElementById('partner-rate-tbody');
+  if (channels.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:40px;color:#667788;">${year}年暂无合作伙伴客户数据</td></tr>`;
+    return;
+  }
+
+  let rows = '';
+  // 合计行数据
+  let totalNew = 0;
+  let totalOnline = [0,0,0,0,0,0,0,0,0,0,0,0];
+  let totalCount = [0,0,0,0,0,0,0,0,0,0,0,0];
+
+  channels.forEach(ch => {
+    const list = channelMap[ch];
+    totalNew += list.length;
+    // 按月统计
+    const monthlyNew = [0,0,0,0,0,0,0,0,0,0,0,0];
+    const monthlyOnline = [0,0,0,0,0,0,0,0,0,0,0,0];
+    list.forEach(p => {
+      const month = parseInt(p.startDate.substring(5, 7)) - 1;
+      if (month >= 0 && month < 12) {
+        monthlyNew[month]++;
+        totalCount[month]++;
+        const r = judgePartnerOnline(p);
+        if (r.status === '已上线') {
+          monthlyOnline[month]++;
+          totalOnline[month]++;
+        }
+      }
+    });
+
+    // 渠道总上线数
+    const chOnline = list.filter(p => judgePartnerOnline(p).status === '已上线').length;
+    const chRate = list.length > 0 ? (chOnline / list.length * 100).toFixed(1) : '0.0';
+
+    rows += `<tr>
+      <td><strong>${ch}</strong></td>
+      <td>${list.length} <span style="color:#52c41a;font-size:12px;">(${chOnline}上线 ${chRate}%)</span></td>`;
+    for (let m = 0; m < 12; m++) {
+      if (monthlyNew[m] === 0) {
+        rows += `<td style="color:#445566;">-</td>`;
+      } else {
+        const mRate = (monthlyOnline[m] / monthlyNew[m] * 100).toFixed(0);
+        const rateColor = mRate >= 50 ? '#52c41a' : mRate >= 20 ? '#fa8c16' : '#ff4d4f';
+        rows += `<td>${monthlyNew[m]}新<br><span style="color:${rateColor};font-size:12px;">${monthlyOnline[m]}上线 ${mRate}%</span></td>`;
+      }
+    }
+    rows += '</tr>';
+  });
+
+  // 合计行（放在最上方）
+  const totalOnlineAll = totalOnline.reduce((a, b) => a + b, 0);
+  const totalRate = totalNew > 0 ? (totalOnlineAll / totalNew * 100).toFixed(1) : '0.0';
+  let totalRow = `<tr style="background:rgba(255,107,64,0.08);font-weight:600;">
+    <td>合计</td>
+    <td>${totalNew} <span style="color:#52c41a;font-size:12px;">(${totalOnlineAll}上线 ${totalRate}%)</span></td>`;
+  for (let m = 0; m < 12; m++) {
+    if (totalCount[m] === 0) {
+      totalRow += `<td style="color:#445566;">-</td>`;
+    } else {
+      const mRate = (totalOnline[m] / totalCount[m] * 100).toFixed(0);
+      const rateColor = mRate >= 50 ? '#52c41a' : mRate >= 20 ? '#fa8c16' : '#ff4d4f';
+      totalRow += `<td>${totalCount[m]}新<br><span style="color:${rateColor};font-size:12px;">${totalOnline[m]}上线 ${mRate}%</span></td>`;
+    }
+  }
+  totalRow += '</tr>';
+
+  tbody.innerHTML = totalRow + rows;
+}
+
+function renderPartnerStatCards() {
+  const all = appData.partners || [];
+  const total = all.length;
+  // 按年份分组
+  const y26 = all.filter(p => p.startDate && p.startDate.startsWith('2026'));
+  const y25 = all.filter(p => p.startDate && p.startDate.startsWith('2025'));
+  // 上线状态统计（含年份）
+  let onlineCount = 0, offlineCount = 0, y26Online = 0, y26Offline = 0, y25Online = 0, y25Offline = 0;
+  all.forEach(p => {
+    const r = judgePartnerOnline(p);
+    const isOnline = r.status === '已上线';
+    if (isOnline) onlineCount++; else offlineCount++;
+    if (p.startDate && p.startDate.startsWith('2026')) { if (isOnline) y26Online++; else y26Offline++; }
+    if (p.startDate && p.startDate.startsWith('2025')) { if (isOnline) y25Online++; else y25Offline++; }
+  });
+  // 渠道统计（含年份）
+  const channelOps = all.filter(p => p.channel === '渠道运营').length;
+  const channelAgent = all.filter(p => p.channel === '渠道代理').length;
+  const y26Ops = y26.filter(p => p.channel === '渠道运营').length;
+  const y26Agent = y26.filter(p => p.channel === '渠道代理').length;
+  const y25Ops = y25.filter(p => p.channel === '渠道运营').length;
+  const y25Agent = y25.filter(p => p.channel === '渠道代理').length;
+  // 年份总数
+  const y2026 = y26.length, y2025 = y25.length;
+  // 上线率
+  const rate = total > 0 ? (onlineCount / total * 100).toFixed(1) : '0.0';
+  const rate26 = y2026 > 0 ? (y26Online / y2026 * 100).toFixed(1) : '0.0';
+  const rate25 = y2025 > 0 ? (y25Online / y2025 * 100).toFixed(1) : '0.0';
+
+  document.getElementById('partner-stat-cards').innerHTML = `
+    <div class="stat-card card-total">
+      <div class="stat-label">合作伙伴总数</div>
+      <div class="stat-value">${total}</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#FF8A5C;">${y2026}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#FF8A5C;">${y2025}</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-online">
+      <div class="stat-label">已上线</div>
+      <div class="stat-value">${onlineCount}</div>
+      <div class="stat-sub">累计订单≥30</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#52c41a;">${y26Online}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#52c41a;">${y25Online}</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-offline">
+      <div class="stat-label">未上线</div>
+      <div class="stat-value">${offlineCount}</div>
+      <div class="stat-sub">累计订单<30</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#fa8c16;">${y26Offline}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#fa8c16;">${y25Offline}</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-warning">
+      <div class="stat-label">渠道分布</div>
+      <div class="stat-value" style="font-size:22px;">${channelOps}<span style="font-size:14px;color:#8899aa;font-weight:400;"> / </span>${channelAgent}</div>
+      <div class="stat-sub">渠道运营 / 渠道代理</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#ff4d4f;">${y26Ops}/${y26Agent}</span></div>
+        <div class="stat-year-item">2025年<span style="color:#ff4d4f;">${y25Ops}/${y25Agent}</span></div>
+      </div>
+    </div>
+    <div class="stat-card card-rate">
+      <div class="stat-label">上线率</div>
+      <div class="stat-value">${rate}<span style="font-size:18px;font-weight:400;">%</span></div>
+      <div class="stat-sub">已上线/总数</div>
+      <div class="stat-year-row">
+        <div class="stat-year-item">2026年<span style="color:#FF6B40;">${rate26}%</span></div>
+        <div class="stat-year-item">2025年<span style="color:#FF6B40;">${rate25}%</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function getFilteredPartners() {
+  const all = appData.partners || [];
+  const fSourceChannel = document.getElementById('partner-filter-source-channel').value.trim().toLowerCase();
+  const fStatus = document.getElementById('partner-filter-status').value;
+  const fProgress = document.getElementById('partner-filter-progress').value;
+  const fStartDate = document.getElementById('partner-filter-start-date').value;
+  const fEndDate = document.getElementById('partner-filter-end-date').value;
+  const fVersion = document.getElementById('partner-filter-version').value;
+  const fProxy = document.getElementById('partner-filter-proxy').value;
+  const fSearch = document.getElementById('partner-search').value.trim().toLowerCase();
+  return all.filter(p => {
+    if (fSourceChannel && !(p.sourceChannel || '').toLowerCase().includes(fSourceChannel)) return false;
+    const judge = judgePartnerOnline(p);
+    if (fStatus && judge.status !== fStatus) return false;
+    const progress = judgePartnerProgress(p);
+    if (fProgress && progress.label !== fProgress) return false;
+    if (fStartDate && p.startDate && p.startDate < fStartDate) return false;
+    if (fEndDate && p.startDate && p.startDate > fEndDate) return false;
+    if (fVersion && p.version !== fVersion) return false;
+    if (fProxy === 'yes' && !p.proxyImplementation) return false;
+    if (fProxy === 'no' && p.proxyImplementation) return false;
+    if (fSearch) {
+      const s = fSearch;
+      if (!p.companyName.toLowerCase().includes(s) && !String(p.companyId).includes(s)) return false;
+    }
+    return true;
+  });
+}
+
+function buildPartnerPageButtons(current, total) {
+  let html = ''; const range = 2;
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || (i >= current - range && i <= current + range)) html += `<button class="btn ${i === current ? 'active' : ''}" onclick="partnerCurrentPage=${i};renderPartnerTable()">${i}</button>`;
+    else if (i === current - range - 1 || i === current + range + 1) html += '<span style="padding:0 4px;color:#667788;">...</span>';
+  }
+  return html;
+}
+
+function renderPartnerTable() {
+  const filtered = getFilteredPartners();
+  // 按开通时间降序排列（最新优先）
+  filtered.sort((a, b) => {
+    if (!a.startDate && !b.startDate) return 0;
+    if (!a.startDate) return 1;
+    if (!b.startDate) return -1;
+    return b.startDate.localeCompare(a.startDate);
+  });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PARTNER_PAGE_SIZE));
+  if (partnerCurrentPage > totalPages) partnerCurrentPage = totalPages;
+  const start = (partnerCurrentPage - 1) * PARTNER_PAGE_SIZE;
+  const pageData = filtered.slice(start, start + PARTNER_PAGE_SIZE);
+
+  const tbody = document.getElementById('partner-tbody');
+  const industryAvgP = buildIndustryAvgDays();
+  if (pageData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:#667788;">暂无合作伙伴客户数据，请导入Excel数据</td></tr>';
+  } else {
+    tbody.innerHTML = pageData.map(function(p) {
+      var judge = judgePartnerOnline(p);
+      var progress = judgePartnerProgress(p);
+      var vc = p.version === '旗舰版' ? 'tag-flagship' : p.version === '新专业版' ? 'tag-pro' : 'tag-standard';
+      var avgDaysP = p.industry && industryAvgP[p.industry] != null ? industryAvgP[p.industry] + '天' : '-';
+      return '<tr>' +
+        '<td class="col-fixed-left"><span style="font-weight:600;color:#e0e6ed;">' + (p.companyName || '-') + '</span></td>' +
+        '<td>' + (p.sourceChannel || '-') + '</td>' +
+        '<td>' + (p.industry || '-') + '</td>' +
+        '<td style="text-align:center;color:#FF8A5C;font-weight:600;">' + avgDaysP + '</td>' +
+        '<td><span class="version-tag ' + vc + '" style="font-size:12px;padding:2px 8px;border-radius:8px;">' + (p.version || '-') + '</span></td>' +
+        '<td>' + (p.startDate || '-') + '</td>' +
+        '<td>' + (p.startDate ? Math.floor((new Date() - new Date(p.startDate)) / (1000*60*60*24)) + '天' : '-') + '</td>' +
+        '<td>' + (p.productCount || 0) + '</td>' +
+        '<td>' + (p.orderCount || 0) + '</td>' +
+        '<td>' + (p.enabledCustomers || 0) + '</td>' +
+        '<td>' + (p.orderCustomers || 0) + '</td>' +
+        '<td><span class="tag-online-cell ' + judge.statusClass + '">' + judge.status + '</span></td>' +
+        progress.cell +
+        '<td style="text-align:center;">' +
+          '<button class="btn btn-sm" style="padding:3px 10px;font-size:12px;' + (p.proxyImplementation ? 'background:#FF6B40;color:#fff;' : 'background:transparent;color:#667788;') + '" onclick="togglePartnerProxy(\'' + p.companyId + '\',true)">是</button>' +
+          '<button class="btn btn-sm" style="padding:3px 10px;font-size:12px;margin-left:2px;' + (!p.proxyImplementation ? 'background:#334455;color:#8899aa;' : 'background:transparent;color:#667788;') + '" onclick="togglePartnerProxy(\'' + p.companyId + '\',false)">否</button>' +
+        '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  // 分页
+  const pag = document.getElementById('partner-pagination');
+  const partnerPageBtns = buildPartnerPageButtons(partnerCurrentPage, totalPages);
+  pag.innerHTML = `<span>共 ${filtered.length} 条记录</span><div class="pagination-buttons">
+    <button class="btn" ${partnerCurrentPage <= 1 ? 'disabled' : ''} onclick="partnerCurrentPage--;renderPartnerTable()">&lt;</button>
+    ${partnerPageBtns}
+    <button class="btn" ${partnerCurrentPage >= totalPages ? 'disabled' : ''} onclick="partnerCurrentPage++;renderPartnerTable()">&gt;</button>
+  </div>`;
+
+  // 版本筛选下拉
+  fillSelect('partner-filter-version', appData.versions, '全部版本');
+}
+
+// 代实施切换
+function togglePartnerProxy(companyId, val) {
+  const p = (appData.partners || []).find(x => x.companyId == companyId);
+  if (!p) return;
+  p.proxyImplementation = val;
+  if (val) {
+    // 复制到客户管理（如不存在）
+    const existIdx = appData.customers.findIndex(c => c.companyId == companyId);
+    if (existIdx === -1) {
+      const cust = {
+        companyId: p.companyId, companyName: p.companyName, industry: p.industry || '',
+        version: p.version || '', startDate: p.startDate || '', onlineDate: p.onlineDate || '',
+        stage: p.stage || '', progressDesc: p.progressDesc || [], proxyImplementation: true,
+        online: judgePartnerOnline(p).status, channel: p.sourceChannel || '渠道代理'
+      };
+      appData.customers.push(cust);
+    }
+  } else {
+    // 从客户管理中移除（仅移除代实施标记的）
+    appData.customers = appData.customers.filter(c => !(c.companyId == companyId && c.proxyImplementation));
+  }
+  saveData(appData);
+  renderPartnerTable();
+}
+
+// ========== 直销客户跟进提醒（开通后每2天跟进，共3次） ==========
+const FOLLOW_UP_WEBHOOK = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=53906a6e-4e11-4f45-89f1-0e481aeda7cd';
+
+function addDaysSkipWeekend(startDate, days) {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + days);
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
+
+function getFollowUpDates(startDateStr) {
+  if (!startDateStr) return [];
+  const start = new Date(startDateStr);
+  if (isNaN(start.getTime())) return [];
+  const d1 = addDaysSkipWeekend(start, 2);
+  const d2 = addDaysSkipWeekend(d1, 2);
+  const d3 = addDaysSkipWeekend(d2, 2);
+  return [d1, d2, d3];
+}
+
+// ========== 今日跟进客户模块（新规则：开通+2/+4/+7天，节假日顺延） ==========
+function getFollowUpDatesV2(startDateStr) {
+  if (!startDateStr) return [];
+  var start = new Date(startDateStr);
+  if (isNaN(start.getTime())) return [];
+  var d1 = addDaysSkipWeekend(start, 2);
+  var d2 = addDaysSkipWeekend(d1, 2);
+  var d3 = addDaysSkipWeekend(d2, 3);
+  return [d1, d2, d3];
+}
+
+function getTodayFollowUpV2() {
+  var today = new Date().toISOString().substring(0, 10);
+  var result = [];
+  appData.customers.forEach(function(c) {
+    if (!c.startDate) return;
+    var dates = getFollowUpDatesV2(c.startDate);
+    dates.forEach(function(d, idx) {
+      if (d.toISOString().substring(0, 10) === today) {
+        var daysSince = Math.floor((new Date() - new Date(c.startDate)) / (1000 * 60 * 60 * 24));
+        result.push({
+          customer: c,
+          followUpNo: idx + 1,
+          daysSinceStart: daysSince,
+          msg: c.companyName + '（' + (c.industry || '未知') + '）商品' + (c.productCount || 0) + '个，客户' + (c.orderCustomers || 0) + '个：今天是客户开通系统的第' + daysSince + '天，请及时跟进客户搭建进展。'
+        });
+      }
+    });
+  });
+  return result;
+}
+
+function renderFollowUp() {
+  var list = getTodayFollowUpV2();
+  var today = new Date().toISOString().substring(0, 10);
+
+  document.getElementById('fu-stat-cards').innerHTML =
+    '<div class="stat-card card-total"><div class="stat-label">今日需跟进</div><div class="stat-value">' + list.length + '</div><div class="stat-sub">' + today + '</div></div>' +
+    '<div class="stat-card card-online"><div class="stat-label">第1次跟进</div><div class="stat-value">' + list.filter(function(x) { return x.followUpNo === 1; }).length + '</div><div class="stat-sub">开通+2天</div></div>' +
+    '<div class="stat-card card-rate"><div class="stat-label">第2次跟进</div><div class="stat-value">' + list.filter(function(x) { return x.followUpNo === 2; }).length + '</div><div class="stat-sub">开通+4天</div></div>' +
+    '<div class="stat-card card-offline"><div class="stat-label">第3次跟进</div><div class="stat-value">' + list.filter(function(x) { return x.followUpNo === 3; }).length + '</div><div class="stat-sub">开通+7天</div></div>';
+
+  var tbody = document.getElementById('fu-tbody');
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#667788;">今日无需要跟进的客户</td></tr>';
+  } else {
+    tbody.innerHTML = list.map(function(item) {
+      var c = item.customer;
+      var fuTag = item.followUpNo === 1 ? 'tag-cell-green' : item.followUpNo === 2 ? 'tag-online-cell' : 'tag-cell-red';
+      return '<tr>' +
+        '<td><span style="font-weight:600;color:#e0e6ed;">' + (c.companyName || '-') + '</span></td>' +
+        '<td>' + (c.industry || '-') + '</td>' +
+        '<td>' + (c.startDate || '-') + '</td>' +
+        '<td>' + item.daysSinceStart + '天</td>' +
+        '<td>' + (c.productCount || 0) + '</td>' +
+        '<td>' + (c.orderCustomers || 0) + '</td>' +
+        '<td><span class="' + fuTag + '" style="font-size:12px;padding:2px 8px;border-radius:8px;">第' + item.followUpNo + '次</span></td>' +
+        '<td style="max-width:400px;white-space:normal;color:#c0c8d0;font-size:12px;line-height:1.5;">' + item.msg + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+}
+
+function getTodayFollowUpCustomers() {
+  const today = new Date();
+  const todayStr = today.toISOString().substring(0, 10);
+  const result = [];
+
+  const directCustomers = appData.customers.filter(c => c.startDate);
+  directCustomers.forEach(c => {
+    const dates = getFollowUpDates(c.startDate);
+    dates.forEach((d, idx) => {
+      const dStr = d.toISOString().substring(0, 10);
+      if (dStr === todayStr) {
+        result.push({
+          companyId: c.companyId,
+          companyName: c.companyName,
+          startDate: c.startDate,
+          followUpIndex: idx + 1,
+          followUpDate: dStr
+        });
+      }
+    });
+  });
+
+  result.sort((a, b) => a.companyId - b.companyId);
+  return result;
+}
+
+function buildMarkdownMessage(customers) {
+  const today = new Date().toISOString().substring(0, 10);
+  const lines = [
+    "**📋 客户搭建进度跟进提醒**",
+    `> 今日（${today}）需跟进客户：<font color="info">${customers.length}家</font>`,
+    ""
+  ];
+  customers.forEach((c, i) => {
+    lines.push(`**${i + 1}. ${c.companyName || '公司ID:' + c.companyId}**`);
+    lines.push(`> 公司ID：${c.companyId}　｜　开通时间：${c.startDate}　｜　第${c.followUpIndex}次跟进`);
+  });
+  lines.push("");
+  lines.push("> 请及时跟进客户搭建进度，确保客户顺利上线使用。");
+  return lines.join("\n");
+}
+
+async function sendWechatWebhook(content) {
+  return fetch(FOLLOW_UP_WEBHOOK, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      msgtype: 'markdown',
+      markdown: { content: content }
+    })
+  }).then(resp => resp.json());
+}
+
+async function sendFollowUpReminder() {
+  console.log('='.repeat(50));
+  console.log('📋 客户搭建进度跟进提醒');
+  console.log('='.repeat(50));
+
+  const followUpList = getTodayFollowUpCustomers();
+
+  if (followUpList.length === 0) {
+    console.log('✅ 今日无需跟进的客户');
+    return '今日无需跟进的客户';
+  }
+
+  console.log(`\n今日需跟进客户：${followUpList.length} 家`);
+  console.log('-'.repeat(40));
+  followUpList.forEach(c => {
+    console.log(`  ${c.companyName}（ID:${c.companyId}）- 第${c.followUpIndex}次跟进 - 开通时间：${c.startDate}`);
+  });
+  console.log('-'.repeat(40));
+
+  const msg = buildMarkdownMessage(followUpList);
+  console.log(`\n推送消息内容：\n${msg}\n`);
+
+  try {
+    const result = await sendWechatWebhook(msg);
+    if (result.errcode === 0) {
+      console.log(`✅ 推送成功，共推送 ${followUpList.length} 家客户跟进提醒`);
+      return `推送成功，共推送 ${followUpList.length} 家客户跟进提醒`;
+    } else {
+      console.log(`❌ 企微返回错误：${result.errmsg}`);
+      return `企微返回错误：${result.errmsg}`;
+    }
+  } catch (err) {
+    console.log(`❌ 推送失败：${err.message}`);
+    return `推送失败：${err.message}`;
+  }
+}
+
+window.sendFollowUpReminder = sendFollowUpReminder;
+
+
+function cleanNonDirectCustomers() {
+  const toMove = [];
+  const toRemove = [];
+  appData.customers.forEach((c, i) => {
+    if (c.channel && c.channel !== '直销' && !c.proxyImplementation) {
+      toRemove.push(i);
+      if (c.channel === '渠道运营' || c.channel === '渠道代理') {
+        toMove.push(c);
+      }
+    }
+  });
+  if (toRemove.length > 0) {
+    toMove.forEach(c => {
+      if (!appData.partners) appData.partners = [];
+      if (!appData.partners.some(p => p.companyId === c.companyId)) {
+        appData.partners.push(c);
+      }
+    });
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+      appData.customers.splice(toRemove[i], 1);
+    }
+    saveData(appData);
+    console.log('[cleanNonDirectCustomers] Removed ' + toRemove.length + ' non-direct customers');
+  }
+}
+
+// ========== 上线率分析 ==========
+
+// 初始化年份下拉（合并直销+合作伙伴的所有年份）
+function orInitYearSelect() {
+  const sel = document.getElementById('or-year');
+  const cv = sel.value;
+  const years = new Set();
+  (appData.customers || []).forEach(c => { if (c.startDate && c.startDate.length >= 4) years.add(c.startDate.substring(0, 4)); });
+  (appData.partners || []).forEach(p => { if (p.startDate && p.startDate.length >= 4) years.add(p.startDate.substring(0, 4)); });
+  sel.innerHTML = '<option value="">全部年份</option>';
+  [...years].sort().reverse().forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '年';
+    sel.appendChild(opt);
+  });
+  if (cv && sel.querySelector(`option[value="${cv}"]`)) sel.value = cv;
+}
+
+function orOnYearChange() {
+  // 年份切换时，清空月份和日期范围
+  document.getElementById('or-month').value = '';
+  document.getElementById('or-from').value = '';
+  document.getElementById('or-to').value = '';
+  orClearQuick();
+  renderOnlineRate();
+}
+
+// 清除快捷按钮的 active 状态
+function orClearQuick() {
+  document.querySelectorAll('.or-qbtn').forEach(b => b.classList.remove('active'));
+}
+
+// 快捷筛选
+function orQuick(type) {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1; // 1-12
+  let from = '', to = '', yearVal = '', monthVal = '';
+  orClearQuick();
+  if (type === 'clear') {
+    // 全部：清空所有筛选
+  } else if (type === 'lastyear') {
+    yearVal = String(y - 1);
+    document.getElementById('orq-lastyear').classList.add('active');
+  } else if (type === 'thisyear') {
+    yearVal = String(y);
+    document.getElementById('orq-thisyear').classList.add('active');
+  } else if (type === 'q1') {
+    yearVal = String(y); from = `${y}-01-01`; to = `${y}-03-31`;
+    document.getElementById('orq-q1').classList.add('active');
+  } else if (type === 'q2') {
+    yearVal = String(y); from = `${y}-04-01`; to = `${y}-06-30`;
+    document.getElementById('orq-q2').classList.add('active');
+  } else if (type === 'q3') {
+    yearVal = String(y); from = `${y}-07-01`; to = `${y}-09-30`;
+    document.getElementById('orq-q3').classList.add('active');
+  } else if (type === 'q4') {
+    yearVal = String(y); from = `${y}-10-01`; to = `${y}-12-31`;
+    document.getElementById('orq-q4').classList.add('active');
+  } else if (type === 'half6') {
+    // 近半年：当前月往前6个月（不含当月则已过去的，按需含当月）
+    // 例：当前5月 → 统计 上年11月~本年4月（不含当月未结束），此处取前6个自然月
+    document.getElementById('orq-half6').classList.add('active');
+    const months = [];
+    for (let i = 1; i <= 6; i++) {
+      let mm = m - i; let yy = y;
+      if (mm <= 0) { mm += 12; yy -= 1; }
+      months.push({ y: yy, m: mm });
+    }
+    months.sort((a, b) => a.y !== b.y ? a.y - b.y : a.m - b.m);
+    const first = months[0], last = months[months.length - 1];
+    const lastDayOfMonth = new Date(last.y, last.m, 0).getDate();
+    from = `${first.y}-${String(first.m).padStart(2,'0')}-01`;
+    to = `${last.y}-${String(last.m).padStart(2,'0')}-${String(lastDayOfMonth).padStart(2,'0')}`;
+  }
+  document.getElementById('or-year').value = yearVal;
+  document.getElementById('or-month').value = monthVal;
+  document.getElementById('or-from').value = from;
+  document.getElementById('or-to').value = to;
+  renderOnlineRate();
+}
+
+// 获取筛选范围内的开通日期过滤函数
+function orGetDateFilter() {
+  const yearVal = document.getElementById('or-year').value;
+  const monthVal = document.getElementById('or-month').value;
+  const fromVal = document.getElementById('or-from').value;
+  const toVal = document.getElementById('or-to').value;
+  return function(startDate) {
+    if (!startDate) return false;
+    const d = startDate.substring(0, 10);
+    // 日期范围优先（快捷筛选会设置 from/to）
+    if (fromVal || toVal) {
+      if (fromVal && d < fromVal) return false;
+      if (toVal && d > toVal) return false;
+      return true;
+    }
+    // 年份 + 月份
+    if (yearVal && !d.startsWith(yearVal)) return false;
+    if (monthVal && d.substring(5, 7) !== monthVal) return false;
+    return true;
+  };
+}
+
+// 判断直销客户是否上线
+function judgeDirectOnline(c) {
+  return (Number(c.orderCount) || 0) >= 30;
+}
+
+// 生成进度条HTML
+function orRateBar(rate) {
+  const pct = Math.min(100, Math.max(0, rate));
+  const color = pct >= 60 ? '#52c41a' : pct >= 30 ? '#fa8c16' : '#ff4d4f';
+  return `<div class="or-rate-bar-wrap"><div class="or-rate-bar-bg"><div class="or-rate-bar-fill" style="width:${pct}%;background:${color};"></div></div><span style="color:${color};font-weight:600;font-size:13px;min-width:48px;">${pct.toFixed(1)}%</span></div>`;
+}
+
+function renderOnlineRate() {
+  orInitYearSelect();
+  const pass = orGetDateFilter();
+
+  // 直销：筛选后的数据
+  const directAll = (appData.customers || []).filter(c => pass(c.startDate));
+  const directOnlineList = directAll.filter(c => judgeDirectOnline(c));
+  const directOfflineList = directAll.filter(c => !judgeDirectOnline(c));
+  const directOnline = directOnlineList.length;
+  const directRate = directAll.length > 0 ? directOnline / directAll.length * 100 : 0;
+
+  // 渠道运营
+  const opsAll = (appData.partners || []).filter(p => p.channel === '渠道运营' && pass(p.startDate));
+  const opsOnlineList = opsAll.filter(p => judgePartnerOnline(p).status === '已上线');
+  const opsOfflineList = opsAll.filter(p => judgePartnerOnline(p).status !== '已上线');
+  const opsOnline = opsOnlineList.length;
+  const opsRate = opsAll.length > 0 ? opsOnline / opsAll.length * 100 : 0;
+
+  // 渠道代理
+  const agentAll = (appData.partners || []).filter(p => p.channel === '渠道代理' && pass(p.startDate));
+  const agentOnlineList = agentAll.filter(p => judgePartnerOnline(p).status === '已上线');
+  const agentOfflineList = agentAll.filter(p => judgePartnerOnline(p).status !== '已上线');
+  const agentOnline = agentOnlineList.length;
+  const agentRate = agentAll.length > 0 ? agentOnline / agentAll.length * 100 : 0;
+
+  // 全部合计
+  const allOnlineList = [].concat(directOnlineList, opsOnlineList, agentOnlineList);
+  const allOfflineList = [].concat(directOfflineList, opsOfflineList, agentOfflineList);
+  const allCount = directAll.length + opsAll.length + agentAll.length;
+  const allOnline = allOnlineList.length;
+  const allRate = allCount > 0 ? allOnline / allCount * 100 : 0;
+
+  // ===== 存储数据供穿透查询 =====
+  orDrillData = {
+    allOnline: allOnlineList, allOffline: allOfflineList,
+    directOnline: directOnlineList, directOffline: directOfflineList,
+    opsOnline: opsOnlineList, opsOffline: opsOfflineList,
+    agentOnline: agentOnlineList, agentOffline: agentOfflineList,
+    sourceChannels: {}
+  };
+
+  // --- 概览卡片 ---
+  const rateColor = (r) => r >= 60 ? '#52c41a' : r >= 30 ? '#fa8c16' : '#ff4d4f';
+  const badgeOnline = (dataRef, label) => '<span class="or-badge-click" style="color:#52c41a;font-weight:600;" onclick="orShowDrillModal('+dataRef+",'"+label+"')\">";
+  const badgeOffline = (dataRef, label) => '<span class="or-badge-click" style="color:#fa8c16;font-weight:600;" onclick="orShowDrillModal('+dataRef+",'"+label+"')\">";
+  document.getElementById('or-overview').innerHTML = `
+    <div class="stat-card" style="padding:18px 20px;">
+      <div class="stat-label">全部客户总数</div>
+      <div class="stat-value" style="color:#FF8A5C;">${allCount}</div>
+      <div class="stat-sub">上线 ${badgeOnline('orDrillData.allOnline','全部-已上线客户')}${allOnline}</span> 家 / 未上线 ${badgeOffline('orDrillData.allOffline','全部-未上线客户')}${allCount - allOnline}</span> 家</div>
+      <div style="margin-top:10px;">${orRateBar(allRate)}</div>
+    </div>
+    <div class="stat-card" style="padding:18px 20px;">
+      <div class="stat-label">直销上线率</div>
+      <div class="stat-value" style="font-size:28px;color:${rateColor(directRate)}">${directRate.toFixed(1)}%</div>
+      <div class="stat-sub">上线 ${badgeOnline('orDrillData.directOnline','直销-已上线客户')}${directOnline}</span> / 未上线 ${badgeOffline('orDrillData.directOffline','直销-未上线客户')}${directAll.length - directOnline}</span></div>
+    </div>
+    <div class="stat-card" style="padding:18px 20px;">
+      <div class="stat-label">渠道运营上线率</div>
+      <div class="stat-value" style="font-size:28px;color:${rateColor(opsRate)}">${opsRate.toFixed(1)}%</div>
+      <div class="stat-sub">上线 ${badgeOnline('orDrillData.opsOnline','渠道运营-已上线客户')}${opsOnline}</span> / 未上线 ${badgeOffline('orDrillData.opsOffline','渠道运营-未上线客户')}${opsAll.length - opsOnline}</span></div>
+    </div>
+    <div class="stat-card" style="padding:18px 20px;">
+      <div class="stat-label">渠道代理上线率</div>
+      <div class="stat-value" style="font-size:28px;color:${rateColor(agentRate)}">${agentRate.toFixed(1)}%</div>
+      <div class="stat-sub">上线 ${badgeOnline('orDrillData.agentOnline','渠道代理-已上线客户')}${agentOnline}</span> / 未上线 ${badgeOffline('orDrillData.agentOffline','渠道代理-未上线客户')}${agentAll.length - agentOnline}</span></div>
+    </div>`;
+
+  // --- 渠道类型明细 ---
+  const types = [
+    { name: '直销', total: directAll.length, online: directOnline, rate: directRate, dk: 'direct' },
+    { name: '渠道运营', total: opsAll.length, online: opsOnline, rate: opsRate, dk: 'ops' },
+    { name: '渠道代理', total: agentAll.length, online: agentOnline, rate: agentRate, dk: 'agent' },
+  ];
+  document.getElementById('or-channel-type').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+    ${types.map(t => `
+      <div style="background:#1a2744;border-radius:8px;padding:16px 18px;border:1px solid rgba(255,255,255,0.06);">
+        <div style="font-size:14px;font-weight:600;color:#c0c8d0;margin-bottom:12px;">${t.name}</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#8899aa;margin-bottom:6px;">
+          <span>客户总数</span><span style="color:#e0e6ed;font-weight:600;">${t.total}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#8899aa;margin-bottom:6px;">
+          <span>已上线</span><span class="or-badge-click" style="color:#52c41a;font-weight:600;" onclick="orShowDrillModal(orDrillData.${t.dk}Online,'${t.name}-已上线客户')">${t.online}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#8899aa;margin-bottom:10px;">
+          <span>未上线</span><span class="or-badge-click" style="color:#fa8c16;font-weight:600;" onclick="orShowDrillModal(orDrillData.${t.dk}Offline,'${t.name}-未上线客户')">${t.total - t.online}</span>
+        </div>
+        ${orRateBar(t.rate)}
+      </div>`).join('')}
+    </div>`;
+
+  // --- 来源渠道明细 ---
+  // 存储每个来源渠道的已上线/未上线明细
+  var scOnlineList = {};
+  var scOfflineList = {};
+  directAll.forEach(function(c) {
+    var key = c.sourceChannel || '直销';
+    if (!scOnlineList[key]) { scOnlineList[key] = []; scOfflineList[key] = []; }
+    if (judgeDirectOnline(c)) scOnlineList[key].push(c); else scOfflineList[key].push(c);
+  });
+  opsAll.forEach(function(p) {
+    var key = p.sourceChannel || '渠道运营';
+    if (!scOnlineList[key]) { scOnlineList[key] = []; scOfflineList[key] = []; }
+    if (judgePartnerOnline(p).status === '已上线') scOnlineList[key].push(p); else scOfflineList[key].push(p);
+  });
+  agentAll.forEach(function(p) {
+    var key = p.sourceChannel || '渠道代理';
+    if (!scOnlineList[key]) { scOnlineList[key] = []; scOfflineList[key] = []; }
+    if (judgePartnerOnline(p).status === '已上线') scOnlineList[key].push(p); else scOfflineList[key].push(p);
+  });
+  var scData = {};
+  Object.keys(scOnlineList).forEach(function(k) {
+    scData[k] = { online: scOnlineList[k], offline: scOfflineList[k], total: scOnlineList[k].length + scOfflineList[k].length };
+  });
+  orDrillData.sourceChannels = scData;
+
+  const sourceList = Object.entries(scData).sort((a, b) => b[1].total - a[1].total);
+  var tbody = document.getElementById('or-source-tbody');
+  if (sourceList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#667788;">暂无数据</td></tr>';
+  } else {
+    tbody.innerHTML = sourceList.map(function(kv) {
+      var name = kv[0], d = kv[1];
+      var r = d.total > 0 ? d.online.length / d.total * 100 : 0;
+      var escName = name.replace(/'/g, "\\'");
+      return '<tr>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;font-weight:600;">' + name + '</td>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center;color:#e0e6ed;">' + d.total + '</td>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center;"><span class="or-badge-click" style="color:#52c41a;font-weight:600;" onclick="orShowSourceDrill(\'' + escName + '\',true)">' + d.online.length + '</span></td>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center;"><span class="or-badge-click" style="color:#fa8c16;font-weight:600;" onclick="orShowSourceDrill(\'' + escName + '\',false)">' + d.offline.length + '</span></td>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">' + orRateBar(r) + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+}
+
+// ========== 数据穿透弹窗 ==========
+var orDrillData = {};
+
+function orGetRowFields(item) {
+  return {
+    companyId: item.companyId != null ? item.companyId : '-',
+    companyName: item.companyName || '-',
+    version: item.version || '-',
+    activeLevel: item.activeLevel || '-',
+    productCount: item.productCount != null ? item.productCount : 0,
+    orderCustomers: item.orderCustomers != null ? item.orderCustomers : 0,
+    orderCount: item.orderCount != null ? item.orderCount : 0,
+    industry: item.industry || '-',
+    sourceChannel: item.sourceChannel || item.channel || '-',
+    csStaff: item.csStaff || '-',
+    startDate: item.startDate || '-'
+  };
+}
+
+function orShowDrillModal(dataList, title) {
+  if (!dataList || dataList.length === 0) { alert('暂无明细数据'); return; }
+  document.getElementById('or-drill-title').textContent = title;
+  document.getElementById('or-drill-count').textContent = '共 ' + dataList.length + ' 条记录';
+  var tbody = document.getElementById('or-drill-tbody');
+  var rows = [];
+  for (var i = 0; i < dataList.length; i++) {
+    var f = orGetRowFields(dataList[i]);
+    rows.push(
+      '<tr>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;">' + f.companyId + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#e0e6ed;font-weight:600;">' + f.companyName + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;">' + f.version + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;">' + f.activeLevel + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center;color:#e0e6ed;">' + f.productCount + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center;color:#e0e6ed;">' + f.orderCustomers + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center;color:#e0e6ed;font-weight:600;">' + f.orderCount + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;">' + f.industry + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;">' + f.sourceChannel + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;">' + f.csStaff + '</td>' +
+      '<td style="padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d0;white-space:nowrap;">' + f.startDate + '</td>' +
+      '</tr>'
+    );
+  }
+  tbody.innerHTML = rows.join('');
+  document.getElementById('or-drill-overlay').style.display = 'flex';
+}
+
+function orCloseDrillModal() {
+  document.getElementById('or-drill-overlay').style.display = 'none';
+}
+
+// 来源渠道穿透快捷调用
+function orShowSourceDrill(channelName, isOnline) {
+  var ch = orDrillData.sourceChannels[channelName];
+  if (!ch) { alert('暂无明细数据'); return; }
+  orShowDrillModal(isOnline ? ch.online : ch.offline, '来源渠道[' + channelName + ']-' + (isOnline ? '已上线' : '未上线') + '客户');
+}
+
+function init() {
+  if (!appData.progressRecords) appData.progressRecords = {};
+  if (!appData.partners) appData.partners = [];
+  // Auto-fix: if customer missing channel field, default to direct sales
+  let fixed = 0;
+  appData.customers.forEach(c => {
+    if (!c.channel) { c.channel = '直销'; fixed++; }
+  });
+  if (fixed > 0) { saveData(appData); console.log('[init] Fixed ' + fixed + ' customers channel'); }
+  cleanNonDirectCustomers();
+  renderKanban();
+  renderSettings();
+}
+init();
+</script>
+<!-- ===== 快照对比上传弹窗 ===== -->
+<div class="modal-overlay" id="snapshot-modal">
+  <div class="snap-modal">
+    <div class="modal-header">
+      <h3>📊 上传商品快照对比</h3>
+      <button class="modal-close" onclick="closeSnapshotModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:#667788;margin-bottom:14px;">上传当天与前一天的商品总数Excel，系统按公司ID匹配后计算差值。匹配的列为：<b>公司ID</b>、<b>商品总数</b></p>
+      <div class="snap-file-row">
+        <label>当天数据</label>
+        <input type="file" id="snap-today" accept=".xlsx,.xls" onchange="snapFileName(0)">
+        <span id="snap-today-name" style="font-size:11px;color:#556677;"></span>
+      </div>
+      <div class="snap-file-row">
+        <label>前一天数据</label>
+        <input type="file" id="snap-yesterday" accept=".xlsx,.xls" onchange="snapFileName(1)">
+        <span id="snap-yesterday-name" style="font-size:11px;color:#556677;"></span>
+      </div>
+      <div id="snap-result"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeSnapshotModal()">取消</button>
+      <button class="btn btn-primary" onclick="doSnapshotCompare()">开始对比</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 数据穿透弹窗 ===== -->
+<div class="or-drill-overlay" id="or-drill-overlay" style="display:none;" onclick="if(event.target===this)orCloseDrillModal()">
+  <div class="or-drill-modal">
+    <div class="or-drill-header">
+      <span id="or-drill-title" style="font-size:16px;font-weight:600;color:#e0e6ed;"></span>
+      <button class="or-drill-close" onclick="orCloseDrillModal()">✕</button>
+    </div>
+    <div class="or-drill-body">
+      <div id="or-drill-count" class="or-drill-count"></div>
+      <div class="table-scroll" style="max-height:55vh;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">公司ID</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">公司名称</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">系统版本</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">活跃等级</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:center;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">商品总数</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:center;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">下游客户总数</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:center;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">累计订单</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">行业</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">来源渠道</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">客服</th>
+              <th style="background:#1a2744;padding:8px 10px;text-align:left;white-space:nowrap;color:#8899aa;position:sticky;top:0;z-index:1;">开通时间</th>
+            </tr>
+          </thead>
+          <tbody id="or-drill-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
