@@ -224,6 +224,16 @@ tbody tr:last-child td { border-bottom: none; }
 .backup-btn.import { background: rgba(250,173,20,0.1); color: #faad14; border-color: rgba(250,173,20,0.3); }
 .backup-btn.import:hover { background: rgba(250,173,20,0.2); border-color: #faad14; }
 
+/* 同步按钮 */
+.sync-btn { width: 100%; padding: 10px 16px; background: rgba(64,150,255,0.1); color: #4096ff; border: 1px dashed rgba(64,150,255,0.3); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-base); font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.sync-btn:hover { background: rgba(64,150,255,0.2); border-color: #4096ff; color: #69b1ff; transform: translateY(-1px); }
+.sync-btn.syncing { opacity: 0.7; pointer-events: none; }
+.sync-btn.success { background: rgba(82,196,26,0.15); color: #52c41a; border-color: rgba(82,196,26,0.4); }
+.sync-btn.error { background: rgba(255,77,79,0.15); color: #ff4d4f; border-color: rgba(255,77,79,0.4); }
+.sync-status { font-size: 11px; color: #667788; text-align: center; padding: 2px 0; min-height: 18px; }
+.sync-status a { color: #4096ff; text-decoration: none; }
+.sync-status a:hover { text-decoration: underline; }
+
 /* 导入结果提示 */
 .import-toast { position: fixed; top: 24px; right: 24px; padding: 14px 20px; border-radius: var(--radius-sm); font-size: var(--text-base); z-index: 2000; display: none; animation: slideIn 0.3s ease; box-shadow: var(--shadow-md); backdrop-filter: blur(8px); }
 .import-toast.show { display: block; }
@@ -298,6 +308,8 @@ tbody tr:last-child td { border-bottom: none; }
         <button class="backup-btn import" onclick="document.getElementById('backup-upload').click()">📂 恢复备份</button>
       </div>
       <input type="file" id="backup-upload" accept=".json" style="display:none;" onchange="restoreData(event)">
+      <button class="sync-btn" id="sync-btn" onclick="syncToGitHub()">☁️ 同步到线上</button>
+      <div class="sync-status" id="sync-status"></div>
     </div>
   </div>
 
@@ -820,7 +832,150 @@ function loadData() {
   try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) { const data = JSON.parse(raw); if (migrateData(data)) saveData(data); return data; } } catch(e) {}
   return getDefaultData();
 }
-function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+// 启动时异步从 GitHub 拉取最新数据
+async function initGitHubSync() {
+  const statusEl = document.getElementById('sync-status');
+  const remoteData = await loadFromGitHub();
+  if (remoteData) {
+    const localRaw = localStorage.getItem(STORAGE_KEY);
+    const localData = localRaw ? JSON.parse(localRaw) : null;
+    // 比较时间戳：远程数据较新则更新
+    const remoteTime = remoteData._syncTime || 0;
+    const localTime = (localData && localData._syncTime) || 0;
+    if (remoteTime > localTime) {
+      migrateData(remoteData);
+      saveData(remoteData);
+      appData = remoteData;
+      // 刷新当前页面
+      const activePage = document.querySelector('.page.active');
+      if (activePage) {
+        const pageId = activePage.id.replace('page-', '');
+        switchPage(pageId);
+      }
+      if (localData) {
+        statusEl.textContent = '☁️ 已从线上拉取最新数据';
+        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+      }
+    }
+    if (!localData) {
+      // 首次访问，使用远程数据
+      statusEl.textContent = '☁️ 已加载线上数据';
+      setTimeout(() => { statusEl.textContent = ''; }, 5000);
+    }
+  }
+}
+
+// 每次同步时记录时间戳
+const _originalSaveData = saveData;
+saveData = function(data) {
+  _originalSaveData(data);
+}
+
+// ========== GitHub 同步 ==========
+const GITHUB_REPO = 'liyiweiann/customer-impl-mgmt';
+const GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO;
+const GITHUB_RAW = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/data.json';
+const GITHUB_TOKEN_KEY = 'gh_sync_token';
+
+function getGitHubToken() {
+  return localStorage.getItem(GITHUB_TOKEN_KEY) || '';
+}
+function setGitHubToken(token) {
+  localStorage.setItem(GITHUB_TOKEN_KEY, token);
+}
+
+// 页面加载时从 GitHub 拉取最新数据
+async function loadFromGitHub() {
+  try {
+    const resp = await fetch(GITHUB_RAW + '?t=' + Date.now());
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data && (data.customers || data.partners)) return data;
+  } catch(e) {}
+  return null;
+}
+
+// 推送数据到 GitHub
+async function syncToGitHub() {
+  const btn = document.getElementById('sync-btn');
+  const statusEl = document.getElementById('sync-status');
+  let token = getGitHubToken();
+
+  if (!token) {
+    token = prompt('请输入 GitHub Personal Access Token（只需输入一次）\n\n获取方式：\n1. 打开 https://github.com/settings/tokens/new\n2. 勾选 repo 权限\n3. 生成并复制 token');
+    if (!token) { statusEl.textContent = '❌ 未提供 Token'; return; }
+    setGitHubToken(token.trim());
+  }
+
+  btn.classList.add('syncing');
+  btn.textContent = '⏳ 同步中...';
+  statusEl.textContent = '正在上传数据到 GitHub...';
+
+  try {
+    // 打上同步时间戳
+    const syncData = Object.assign({}, appData, { _syncTime: Date.now() });
+    const content = JSON.stringify(syncData, null, 2);
+    const base64Content = btoa(unescape(encodeURIComponent(content)));
+
+    // 先获取文件当前 SHA（如果已存在）
+    let sha = null;
+    const checkResp = await fetch(GITHUB_API + '/contents/data.json', {
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (checkResp.ok) {
+      const fileInfo = await checkResp.json();
+      sha = fileInfo.sha;
+    }
+
+    // 创建或更新文件
+    const body = {
+      message: '更新数据 ' + new Date().toLocaleString('zh-CN'),
+      content: base64Content,
+      branch: 'main'
+    };
+    if (sha) body.sha = sha;
+
+    const updateResp = await fetch(GITHUB_API + '/contents/data.json', {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (updateResp.ok) {
+      btn.classList.remove('syncing');
+      btn.classList.add('success');
+      btn.textContent = '✅ 同步成功';
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+      statusEl.innerHTML = '✅ 已同步 ' + timeStr + ' · <a href="https://liyiweiann.github.io/customer-impl-mgmt/" target="_blank">查看线上</a>';
+      setTimeout(() => { btn.classList.remove('success'); btn.textContent = '☁️ 同步到线上'; }, 3000);
+    } else {
+      const err = await updateResp.json();
+      if (updateResp.status === 401 || updateResp.status === 403) {
+        // Token 无效，清除并提示重新输入
+        localStorage.removeItem(GITHUB_TOKEN_KEY);
+        btn.classList.remove('syncing');
+        btn.classList.add('error');
+        btn.textContent = '❌ Token无效';
+        statusEl.textContent = '❌ Token 无效或已过期，请重新点击同步按钮输入';
+        setTimeout(() => { btn.classList.remove('error'); btn.textContent = '☁️ 同步到线上'; }, 4000);
+      } else {
+        throw new Error(err.message || '上传失败');
+      }
+    }
+  } catch(e) {
+    btn.classList.remove('syncing');
+    btn.classList.add('error');
+    btn.textContent = '❌ 同步失败';
+    statusEl.textContent = '❌ ' + e.message;
+    setTimeout(() => { btn.classList.remove('error'); btn.textContent = '☁️ 同步到线上'; }, 4000);
+  }
+}
 
 // ========== 备份 / 恢复 ==========
 function backupData() {
@@ -955,6 +1110,9 @@ function doSnapshotCompare() {
 }
 
 let appData = loadData();
+
+// 启动时从 GitHub 拉取最新数据
+initGitHubSync();
 
 // ========== 页面切换 ==========
 function switchPage(page) {
