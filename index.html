@@ -2169,6 +2169,12 @@ function handleExcelUpload(event) {
           c.online = (Number(p.orderCount) || 0) >= 30 ? '已上线' : '未上线';
           c.orderCount = p.orderCount;
           c.productCount = p.productCount;
+          c.activeLevel = p.activeLevel;
+          c.csStaff = p.csStaff;
+          c.endDate = p.endDate;
+          c.orderAmount = p.orderAmount;
+          c.enabledCustomers = p.enabledCustomers;
+          c.orderCustomers = p.orderCustomers;
         }
       });
 
@@ -2488,7 +2494,11 @@ function togglePartnerProxy(companyId, val) {
         companyId: p.companyId, companyName: p.companyName, industry: p.industry || '',
         version: p.version || '', startDate: p.startDate || '', onlineDate: p.onlineDate || '',
         stage: p.stage || '', progressDesc: p.progressDesc || [], proxyImplementation: true,
-        online: judgePartnerOnline(p).status, channel: p.sourceChannel || '渠道代理'
+        online: judgePartnerOnline(p).status, channel: p.sourceChannel || '渠道代理',
+        activeLevel: p.activeLevel || '', csStaff: p.csStaff || '', endDate: p.endDate || '',
+        orderCount: p.orderCount || 0, orderAmount: p.orderAmount || 0,
+        productCount: p.productCount || 0, enabledCustomers: p.enabledCustomers || 0,
+        orderCustomers: p.orderCustomers || 0
       };
       appData.customers.push(cust);
     }
