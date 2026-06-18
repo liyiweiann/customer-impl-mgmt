@@ -262,6 +262,26 @@ body.readonly .proxy-th { display: none !important; }
 body.readonly .readonly-badge { display: inline-block; }
 .readonly-badge { display: none; background: rgba(64,150,255,0.12); color: #4096ff; font-size: 12px; padding: 3px 10px; border-radius: 4px; margin-left: 10px; font-weight: 500; letter-spacing: 0.5px; }
 
+/* ===== 密码门 ===== */
+#pwd-gate { position:fixed;top:0;left:0;width:100%;height:100%;background:#0c1321;z-index:99999;display:none;align-items:center;justify-content:center;font-family:var(--font-sans); }
+#pwd-gate.show { display:flex; }
+#pwd-gate-box { background:linear-gradient(135deg,#1a2744,#0f172a);border-radius:16px;padding:44px 36px;text-align:center;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,0.06); }
+#pwd-gate-box .icon { font-size:48px;margin-bottom:16px; }
+#pwd-gate-box h2 { color:#e2e8f0;margin:0 0 8px;font-size:22px;font-weight:700; }
+#pwd-gate-box .sub { color:#94a3b8;font-size:13px;margin-bottom:24px; }
+#pwd-gate-input { width:100%;padding:12px 16px;border-radius:8px;border:2px solid #334155;background:#0f172a;color:#e2e8f0;font-size:16px;text-align:center;outline:none;box-sizing:border-box;transition:border-color .2s; }
+#pwd-gate-input:focus { border-color:#FF6B40; }
+#pwd-gate-submit { width:100%;margin-top:16px;padding:12px;border:none;border-radius:8px;background:linear-gradient(135deg,#FF6B40,#FF8A5C);color:#fff;font-size:16px;font-weight:600;cursor:pointer;transition:opacity .2s; }
+#pwd-gate-submit:hover { opacity:.9; }
+#pwd-gate-error { color:#ff4d4f;font-size:13px;margin-top:12px;min-height:20px; }
+@keyframes pwd-shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-6px);} 75%{transform:translateX(6px);} }
+#pwd-gate-box.shake { animation:pwd-shake .3s ease; }
+
+/* 修改密码按钮（本地版） */
+.pwd-btn { width:100%;padding:9px 16px;background:rgba(114,46,209,0.1);color:#b37feb;border:1px dashed rgba(114,46,209,0.3);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-weight:500;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px; }
+.pwd-btn:hover { background:rgba(114,46,209,0.2);border-color:#722ed1;color:#d3adf7; }
+body.readonly .pwd-btn { display:none !important; }
+
 /* 导入结果提示 */
 .import-toast { position: fixed; top: 24px; right: 24px; padding: 14px 20px; border-radius: var(--radius-sm); font-size: var(--text-base); z-index: 2000; display: none; animation: slideIn 0.3s ease; box-shadow: var(--shadow-md); backdrop-filter: blur(8px); }
 .import-toast.show { display: block; }
@@ -297,6 +317,18 @@ body.readonly .readonly-badge { display: inline-block; }
 </style>
 </head>
 <body>
+
+<!-- ===== 密码门（仅 GitHub Pages 显示） ===== -->
+<div id="pwd-gate">
+  <div id="pwd-gate-box">
+    <div class="icon">🔒</div>
+    <h2>客户实施管理系统</h2>
+    <div class="sub">请输入密码查看内容</div>
+    <input type="password" id="pwd-gate-input" placeholder="请输入访问密码" autofocus />
+    <button id="pwd-gate-submit" onclick="checkPassword()">验证进入</button>
+    <div id="pwd-gate-error"></div>
+  </div>
+</div>
 
 <div class="app-container">
   <!-- 左侧菜单 -->
@@ -338,6 +370,7 @@ body.readonly .readonly-badge { display: inline-block; }
       <input type="file" id="backup-upload" accept=".json" style="display:none;" onchange="restoreData(event)">
       <button class="sync-btn" id="sync-btn" onclick="syncToGitHub()">☁️ 同步到线上</button>
       <div class="sync-status" id="sync-status"></div>
+      <button class="pwd-btn" onclick="changePassword()">🔑 修改访问密码</button>
     </div>
   </div>
 
@@ -1152,6 +1185,105 @@ const IS_READONLY = location.hostname === 'liyiweiann.github.io';
 if (IS_READONLY) {
   document.body.classList.add('readonly');
 }
+
+// ===== 密码门（仅 GitHub Pages 生效） =====
+const PWD_JSON_URL = (location.hostname === 'liyiweiann.github.io')
+  ? location.origin + '/customer-impl-mgmt/pwd.json'
+  : 'https://liyiweiann.github.io/customer-impl-mgmt/pwd.json';
+
+async function initPasswordGate() {
+  if (!IS_READONLY) return; // 本地版不需要密码
+  try {
+    const resp = await fetch(PWD_JSON_URL + '?t=' + Date.now());
+    if (!resp.ok) { console.warn('pwd.json 加载失败'); return; }
+    const pwdData = await resp.json();
+    if (!pwdData || !pwdData.hash) { console.warn('pwd.json 格式错误'); return; }
+    window.__PWD_HASH = pwdData.hash;
+    // 显示密码门
+    document.getElementById('pwd-gate').classList.add('show');
+  } catch(e) {
+    console.warn('密码门初始化失败:', e);
+  }
+}
+
+async function sha256(text) {
+  const buf = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function checkPassword() {
+  const inp = document.getElementById('pwd-gate-input');
+  const box = document.getElementById('pwd-gate-box');
+  const err = document.getElementById('pwd-gate-error');
+  const raw = inp.value.trim().toLowerCase();
+  if (!raw) { err.textContent = '请输入密码'; return; }
+  const hash = await sha256(raw);
+  if (hash === window.__PWD_HASH) {
+    document.getElementById('pwd-gate').classList.remove('show');
+  } else {
+    err.textContent = '密码错误，请重试';
+    box.classList.remove('shake');
+    void box.offsetWidth; // 触发 reflow
+    box.classList.add('shake');
+    inp.value = '';
+    inp.focus();
+  }
+}
+
+// 回车提交密码
+document.getElementById('pwd-gate-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') checkPassword();
+});
+
+// 修改密码（本地版）
+async function changePassword() {
+  const newPwd = prompt('请输入新的访问密码：\n\n规则：英文字母+数字，不区分大小写');
+  if (!newPwd || !newPwd.trim()) return;
+  const pwd = newPwd.trim().toLowerCase();
+  if (!/^[a-z0-9]+$/.test(pwd)) {
+    alert('密码只能包含英文字母和数字'); return;
+  }
+  const hash = await sha256(pwd);
+  // 推送 pwd.json 到 GitHub
+  let token = getGitHubToken();
+  if (!token) {
+    token = prompt('修改密码需要 GitHub Token，请输入：\n\n（与同步功能共用同一个 Token）');
+    if (!token) return;
+    setGitHubToken(token.trim());
+    token = token.trim();
+  }
+  try {
+    // 获取现有 pwd.json 的 SHA
+    let sha = null;
+    const checkResp = await fetch(GITHUB_API + '/contents/pwd.json', {
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (checkResp.ok) { sha = (await checkResp.json()).sha; }
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify({ hash: hash }))));
+    const body = { message: '更新访问密码 ' + new Date().toLocaleString('zh-CN'), content: content, branch: 'main' };
+    if (sha) body.sha = sha;
+    const resp = await fetch(GITHUB_API + '/contents/pwd.json', {
+      method: 'PUT',
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (resp.ok) {
+      alert('✅ 密码修改成功！\n新密码已同步到线上，约1-2分钟后生效。');
+    } else if (resp.status === 401 || resp.status === 403) {
+      localStorage.removeItem(GITHUB_TOKEN_KEY);
+      alert('❌ Token 无效，请重试。');
+    } else {
+      const err = await resp.json();
+      alert('❌ 修改失败：' + (err.message || '未知错误'));
+    }
+  } catch(e) {
+    alert('❌ 网络错误：' + e.message);
+  }
+}
+
+// 启动密码门
+initPasswordGate();
 
 // 启动时从 GitHub 拉取最新数据
 initGitHubSync();
