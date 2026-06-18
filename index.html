@@ -457,6 +457,7 @@ body.readonly .pwd-btn { display:none !important; }
                   <th>到期时间</th>
                   <th>行业</th>
                   <th>行业均上线天</th>
+                  <th>是否超期</th>
                   <th class="col-fixed-right action-col" style="width:130px;">操作</th>
                 </tr>
               </thead>
@@ -552,6 +553,7 @@ body.readonly .pwd-btn { display:none !important; }
                   <th>来源渠道</th>
                   <th>行业</th>
                   <th>行业均上线天</th>
+                  <th>是否超期</th>
                   <th>系统版本</th>
                   <th>开通时间</th>
                   <th>开通天数</th>
@@ -1495,6 +1497,7 @@ function renderCustomerTable() {
     const judge = judgeCustomerV2Progress(c);
     const avgDays = c.industry && industryAvg[c.industry] != null ? industryAvg[c.industry] + '天' : '-';
     const daysSinceStart = c.startDate ? Math.max(0, Math.ceil((new Date() - new Date(c.startDate)) / 86400000)) : '-';
+    const isOverdue = (c.industry && industryAvg[c.industry] != null && c.startDate) ? (industryAvg[c.industry] - daysSinceStart < 0 ? '是' : '否') : '-';
     return `<tr>
       <td class="col-fixed-left" style="white-space:nowrap;" title="${c.companyName}">${c.companyName}</td>
       <td>${c.startDate || '-'}</td>
@@ -1510,6 +1513,7 @@ function renderCustomerTable() {
       <td>${c.endDate || '-'}</td>
       <td>${c.industry || '-'}</td>
       <td style="text-align:center;color:#FF8A5C;font-weight:600;">${avgDays}</td>
+      <td style="text-align:center;font-weight:600;color:${isOverdue === '是' ? '#ff4d4f' : '#52c41a'};">${isOverdue}</td>
       <td class="col-fixed-right" style="white-space:nowrap;">
         <button class="btn-link" onclick='openCustomerModal(${JSON.stringify(c).replace(/'/g,"&#39;")})'>编辑</button>
         <button class="btn-link" onclick="openProgressModal(${c.companyId},'${c.companyName.replace(/'/g,"\\'")}')">进度<span style="color:#667788;">(${recordCount})</span></button>
@@ -1725,14 +1729,20 @@ let confirmCallback = null;
 
 // ========== 导出Excel ==========
 function exportExcel() {
-  const headers = ['公司ID','公司名称','开通时间','开通天数','系统版本','活跃等级','产品数量','订单数量','订单金额','行业','客服','到期时间','已启用客户总数','下单客户总数','是否上线','本地/外地','实施阶段','进度说明','最新进度','未使用分析'];
-  const keys = ['companyId','companyName','startDate','daysSinceStart','version','activeLevel','productCount','orderCount','orderAmount','industry','csStaff','endDate','enabledCustomers','orderCustomers','online','location','stage','progressDesc','latestProgress','unusedAnalysis'];
+  const headers = ['公司ID','公司名称','开通时间','开通天数','是否超期','系统版本','活跃等级','产品数量','订单数量','订单金额','行业','客服','到期时间','已启用客户总数','下单客户总数','是否上线','本地/外地','实施阶段','进度说明','最新进度','未使用分析'];
+  const keys = ['companyId','companyName','startDate','daysSinceStart','isOverdue','version','activeLevel','productCount','orderCount','orderAmount','industry','csStaff','endDate','enabledCustomers','orderCustomers','online','location','stage','progressDesc','latestProgress','unusedAnalysis'];
   let csv = '\uFEFF'; // BOM for Excel中文兼容
   csv += headers.join(',') + '\n';
+  const exportIndustryAvg = buildIndustryAvgDays();
   appData.customers.forEach(c => {
     const row = keys.map(k => {
       let val;
       if (k === 'daysSinceStart') val = c.startDate ? Math.max(0, Math.ceil((new Date() - new Date(c.startDate)) / 86400000)) : '';
+      else if (k === 'isOverdue') {
+        const indAvg = c.industry ? exportIndustryAvg[c.industry] : null;
+        const ds = c.startDate ? Math.max(0, Math.ceil((new Date() - new Date(c.startDate)) / 86400000)) : null;
+        val = (indAvg != null && ds != null) ? (indAvg - ds < 0 ? '是' : '否') : '';
+      }
       else val = c[k];
       if (k === 'progressDesc' && Array.isArray(val)) val = val.join('、');
       if (val === undefined || val === null) val = '';
@@ -2457,21 +2467,24 @@ function renderPartnerTable() {
   const tbody = document.getElementById('partner-tbody');
   const industryAvgP = buildIndustryAvgDays();
   if (pageData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:#667788;">暂无合作伙伴客户数据，请导入Excel数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:40px;color:#667788;">暂无合作伙伴客户数据，请导入Excel数据</td></tr>';
   } else {
     tbody.innerHTML = pageData.map(function(p) {
       var judge = judgePartnerOnline(p);
       var progress = judgePartnerProgress(p);
       var vc = p.version === '旗舰版' ? 'tag-flagship' : p.version === '新专业版' ? 'tag-pro' : 'tag-standard';
       var avgDaysP = p.industry && industryAvgP[p.industry] != null ? industryAvgP[p.industry] + '天' : '-';
+      var daysSinceStartP = p.startDate ? Math.floor((new Date() - new Date(p.startDate)) / (1000*60*60*24)) : null;
+      var isOverdueP = (p.industry && industryAvgP[p.industry] != null && daysSinceStartP != null) ? (industryAvgP[p.industry] - daysSinceStartP < 0 ? '是' : '否') : '-';
       return '<tr>' +
         '<td class="col-fixed-left"><span style="font-weight:600;color:#e0e6ed;">' + (p.companyName || '-') + '</span></td>' +
         '<td>' + (p.sourceChannel || '-') + '</td>' +
         '<td>' + (p.industry || '-') + '</td>' +
         '<td style="text-align:center;color:#FF8A5C;font-weight:600;">' + avgDaysP + '</td>' +
+        '<td style="text-align:center;font-weight:600;color:' + (isOverdueP === '是' ? '#ff4d4f' : '#52c41a') + ';">' + isOverdueP + '</td>' +
         '<td><span class="version-tag ' + vc + '" style="font-size:12px;padding:2px 8px;border-radius:8px;">' + (p.version || '-') + '</span></td>' +
         '<td>' + (p.startDate || '-') + '</td>' +
-        '<td>' + (p.startDate ? Math.floor((new Date() - new Date(p.startDate)) / (1000*60*60*24)) + '天' : '-') + '</td>' +
+        '<td>' + (daysSinceStartP != null ? daysSinceStartP + '天' : '-') + '</td>' +
         '<td>' + (p.productCount || 0) + '</td>' +
         '<td>' + (p.orderCount || 0) + '</td>' +
         '<td>' + (p.enabledCustomers || 0) + '</td>' +
