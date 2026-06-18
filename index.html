@@ -2102,6 +2102,9 @@ function handleExcelUpload(event) {
           newRow.unusedAnalysis = old.unusedAnalysis || '';
           newRow.estimatedProductCount = old.estimatedProductCount || '';
           newRow.onlineDate = old.onlineDate || newRow.onlineDate || '';
+          // 保留快照对比结果
+          newRow.prevProductCount = old.prevProductCount;
+          newRow.snapshotDate = old.snapshotDate;
           appData.customers[existIdx] = newRow;
           updated++;
         } else {
@@ -2122,6 +2125,9 @@ function handleExcelUpload(event) {
           newRow.companyName = old.companyName || newRow.companyName;
           newRow.onlineDate = old.onlineDate || newRow.onlineDate || '';
           newRow.proxyImplementation = old.proxyImplementation || false; // 保留手动设置的代实施标记
+          // 保留快照对比结果
+          newRow.prevProductCount = old.prevProductCount;
+          newRow.snapshotDate = old.snapshotDate;
           appData.partners[existIdx] = newRow;
           pUpdated++;
         } else {
@@ -2158,25 +2164,32 @@ function handleExcelUpload(event) {
       }
 
       // 同步代实施客户数据（从最新合作伙伴数据更新）
-      appData.customers.filter(c => c.proxyImplementation).forEach(c => {
-        const p = (appData.partners || []).find(p => p.companyId == c.companyId);
-        if (p) {
-          c.companyName = p.companyName || c.companyName;
-          c.version = p.version || c.version;
-          c.industry = p.industry || c.industry;
-          c.startDate = p.startDate || c.startDate;
-          c.onlineDate = p.onlineDate || c.onlineDate;
-          c.online = (Number(p.orderCount) || 0) >= 30 ? '已上线' : '未上线';
-          c.orderCount = p.orderCount;
-          c.productCount = p.productCount;
-          c.activeLevel = p.activeLevel;
-          c.csStaff = p.csStaff;
-          c.endDate = p.endDate;
-          c.orderAmount = p.orderAmount;
-          c.enabledCustomers = p.enabledCustomers;
-          c.orderCustomers = p.orderCustomers;
-        }
-      });
+      (function syncProxy() {
+        const proxyCustomers = appData.customers.filter(c => c.proxyImplementation);
+        console.log('[syncProxy] 代实施客户数量:', proxyCustomers.length, proxyCustomers.map(c => c.companyId));
+        proxyCustomers.forEach(c => {
+          const p = (appData.partners || []).find(p => String(p.companyId) === String(c.companyId));
+          if (p) {
+            console.log('[syncProxy] 同步客户', c.companyId, 'partner数据:', p.activeLevel, p.csStaff, p.endDate);
+            c.companyName = p.companyName || c.companyName;
+            c.version = p.version || c.version;
+            c.industry = p.industry || c.industry;
+            c.startDate = p.startDate || c.startDate;
+            c.onlineDate = p.onlineDate || c.onlineDate;
+            c.online = (Number(p.orderCount) || 0) >= 30 ? '已上线' : '未上线';
+            c.orderCount = p.orderCount;
+            c.productCount = p.productCount;
+            if (p.activeLevel !== undefined) c.activeLevel = p.activeLevel;
+            if (p.csStaff !== undefined) c.csStaff = p.csStaff;
+            if (p.endDate !== undefined) c.endDate = p.endDate;
+            if (p.orderAmount !== undefined) c.orderAmount = p.orderAmount;
+            if (p.enabledCustomers !== undefined) c.enabledCustomers = p.enabledCustomers;
+            if (p.orderCustomers !== undefined) c.orderCustomers = p.orderCustomers;
+          } else {
+            console.warn('[syncProxy] 未找到合作伙伴数据:', c.companyId);
+          }
+        });
+      })();
 
       saveData(appData);
 
