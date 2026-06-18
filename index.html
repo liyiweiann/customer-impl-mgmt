@@ -445,6 +445,7 @@ body.readonly .pwd-btn { display:none !important; }
                 <tr>
                   <th class="col-fixed-left">公司名称</th>
                   <th>开通时间</th>
+                  <th>开通天数</th>
                   <th>累计订单</th>
                   <th>是否上线</th>
                   <th>进度说明</th>
@@ -1493,9 +1494,11 @@ function renderCustomerTable() {
     const stageHtml = c.stage ? `<span class="stage-tag" style="color:${stageColor};border:none;background:none;font-weight:500;">${c.stage}</span>` : '-';
     const judge = judgeCustomerV2Progress(c);
     const avgDays = c.industry && industryAvg[c.industry] != null ? industryAvg[c.industry] + '天' : '-';
+    const daysSinceStart = c.startDate ? Math.max(0, Math.ceil((new Date() - new Date(c.startDate)) / 86400000)) : '-';
     return `<tr>
       <td class="col-fixed-left" style="white-space:nowrap;" title="${c.companyName}">${c.companyName}</td>
       <td>${c.startDate || '-'}</td>
+      <td style="text-align:center;font-weight:600;">${daysSinceStart}</td>
       <td style="text-align:center;">${c.orderCount != null ? c.orderCount : '-'}</td>
       <td><span class="tag-online-cell ${c.online === '已上线' ? 'tag-cell-green' : 'tag-cell-red'}">${c.online || '-'}</span></td>
       <td class="progress-desc-cell">${progressHtml}</td>
@@ -1722,13 +1725,15 @@ let confirmCallback = null;
 
 // ========== 导出Excel ==========
 function exportExcel() {
-  const headers = ['公司ID','公司名称','系统版本','活跃等级','产品数量','订单数量','订单金额','行业','客服','开通时间','到期时间','已启用客户总数','下单客户总数','是否上线','本地/外地','实施阶段','进度说明','最新进度','未使用分析'];
-  const keys = ['companyId','companyName','version','activeLevel','productCount','orderCount','orderAmount','industry','csStaff','startDate','endDate','enabledCustomers','orderCustomers','online','location','stage','progressDesc','latestProgress','unusedAnalysis'];
+  const headers = ['公司ID','公司名称','开通时间','开通天数','系统版本','活跃等级','产品数量','订单数量','订单金额','行业','客服','到期时间','已启用客户总数','下单客户总数','是否上线','本地/外地','实施阶段','进度说明','最新进度','未使用分析'];
+  const keys = ['companyId','companyName','startDate','daysSinceStart','version','activeLevel','productCount','orderCount','orderAmount','industry','csStaff','endDate','enabledCustomers','orderCustomers','online','location','stage','progressDesc','latestProgress','unusedAnalysis'];
   let csv = '\uFEFF'; // BOM for Excel中文兼容
   csv += headers.join(',') + '\n';
   appData.customers.forEach(c => {
     const row = keys.map(k => {
-      let val = c[k];
+      let val;
+      if (k === 'daysSinceStart') val = c.startDate ? Math.max(0, Math.ceil((new Date() - new Date(c.startDate)) / 86400000)) : '';
+      else val = c[k];
       if (k === 'progressDesc' && Array.isArray(val)) val = val.join('、');
       if (val === undefined || val === null) val = '';
       val = String(val).replace(/"/g, '""');
