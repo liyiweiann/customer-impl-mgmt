@@ -2865,8 +2865,8 @@ function renderOnlineRate() {
   orInitYearSelect();
   const pass = orGetDateFilter();
 
-  // 直销：筛选后的数据
-  const directAll = (appData.customers || []).filter(c => pass(c.startDate));
+  // 直销：筛选后的数据（排除代实施客户）
+  const directAll = (appData.customers || []).filter(c => !c.proxyImplementation && pass(c.startDate));
   const directOnlineList = directAll.filter(c => judgeDirectOnline(c));
   const directOfflineList = directAll.filter(c => !judgeDirectOnline(c));
   const directOnline = directOnlineList.length;
