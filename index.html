@@ -98,6 +98,18 @@ body { font-family: var(--font-sans); background: #0c1321; color: #e0e6ed; heigh
 .progress-tag-cell { display: block; margin-bottom: 3px; padding: 3px 10px; border-radius: 8px; font-size: 13px; white-space: nowrap; width: fit-content; }
 
 /* ===== 客户管理 ===== */
+.cust-stat-row { display: flex; gap: 12px; margin-bottom: 16px; }
+.cust-stat-chip { flex: 1; justify-content: center; display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.08); background: #1a2744; user-select: none; }
+.cust-stat-chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-xs); }
+.cust-stat-chip .chip-label { font-size: 13px; color: #8899aa; font-weight: 500; }
+.cust-stat-chip .chip-value { font-size: 22px; font-weight: 700; line-height: 1; }
+.cust-stat-chip.chip-normal .chip-value { color: #52c41a; }
+.cust-stat-chip.chip-stagnant .chip-value { color: #ff4d4f; }
+.cust-stat-chip.chip-all .chip-value { color: #FF8A5C; }
+.cust-stat-chip.active { border-color: currentColor; box-shadow: 0 0 0 2px rgba(255,255,255,0.06); }
+.cust-stat-chip.chip-normal.active { border-color: #52c41a; background: rgba(82,196,26,0.1); }
+.cust-stat-chip.chip-stagnant.active { border-color: #ff4d4f; background: rgba(255,77,79,0.1); }
+.cust-stat-chip.chip-all.active { border-color: #FF8A5C; background: rgba(255,138,92,0.1); }
 .customer-toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
 .customer-toolbar select, .customer-toolbar input { padding: 7px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); font-size: var(--text-sm); outline: none; background: #1a2744; color: #e0e6ed; transition: border-color 0.2s; }
 .customer-toolbar select:focus, .customer-toolbar input:focus { border-color: #FF6B40; box-shadow: 0 0 0 3px rgba(255,107,64,0.12); }
@@ -414,6 +426,7 @@ body.readonly .pwd-btn { display:none !important; }
         <button class="btn btn-primary" onclick="openCustomerModal()">+ 新增客户</button>
       </div>
       <div class="content-body">
+        <div class="cust-stat-row" id="cust-stat-row"></div>
         <div class="customer-toolbar">
           <select id="cust-filter-month" onchange="renderCustomerTable()"></select>
           <select id="cust-filter-version" onchange="renderCustomerTable()">
@@ -1455,6 +1468,13 @@ function buildIndustryAvgDays() {
   return result;
 }
 
+// ========== 客户管理 ==========
+var custStatusFilter = ''; // '' = 全部, 'normal' = 正常推进, 'stagnant' = 停滞
+function toggleCustStatusFilter(val) {
+  custStatusFilter = (custStatusFilter === val) ? '' : val;
+  currentPage = 1;
+  renderCustomerTable();
+}
 function renderCustomerTable() {
   fillMonthSelect('cust-filter-month', '2026');
   fillSelect('cust-filter-version', appData.versions, '全部版本');
@@ -1465,13 +1485,38 @@ function renderCustomerTable() {
   const online = document.getElementById('cust-filter-online').value;
   const progressFilter = document.getElementById('cust-filter-progress').value;
   const search = document.getElementById('cust-search').value.trim().toLowerCase();
-  let filtered = appData.customers.filter(c => {
+
+  // ---- 基础筛选（不含卡片推进状态筛选） ----
+  let baseFiltered = appData.customers.filter(c => {
     if (month && c.startDate) { if (month.length === 4 && c.startDate.substring(0, 4) !== month) return false; if (month.length === 7 && c.startDate.substring(0, 7) !== month) return false; }
     if (version && c.version !== version) return false;
     if (stage && c.stage !== stage) return false;
     if (online && c.online !== online) return false;
     if (progressFilter && judgeCustomerV2Progress(c).label !== progressFilter) return false;
     if (search && !c.companyName.toLowerCase().includes(search) && !String(c.companyId).includes(search)) return false;
+    return true;
+  });
+
+  // ---- 推进状态统计卡片（跟随基础筛选） ----
+  const normalCount = baseFiltered.filter(c => !(Array.isArray(c.progressDesc) && c.progressDesc.includes('停滞'))).length;
+  const stagnantCount = baseFiltered.filter(c => Array.isArray(c.progressDesc) && c.progressDesc.includes('停滞')).length;
+  const totalCount = baseFiltered.length;
+  const statRow = document.getElementById('cust-stat-row');
+  if (statRow) {
+    statRow.innerHTML =
+      '<div class="cust-stat-chip chip-normal ' + (custStatusFilter==='normal'?'active':'') + '" onclick="toggleCustStatusFilter(\'normal\')">' +
+        '<span class="chip-label">正常推进</span><span class="chip-value">' + normalCount + '</span></div>' +
+      '<div class="cust-stat-chip chip-stagnant ' + (custStatusFilter==='stagnant'?'active':'') + '" onclick="toggleCustStatusFilter(\'stagnant\')">' +
+        '<span class="chip-label">停滞</span><span class="chip-value">' + stagnantCount + '</span></div>' +
+      '<div class="cust-stat-chip chip-all ' + (custStatusFilter===''?'active':'') + '" onclick="toggleCustStatusFilter(\'\')">' +
+        '<span class="chip-label">全部</span><span class="chip-value">' + totalCount + '</span></div>';
+  }
+  // ---- /推进状态统计卡片 ----
+
+  // ---- 叠加卡片推进状态筛选 ----
+  let filtered = baseFiltered.filter(c => {
+    if (custStatusFilter === 'stagnant' && !(Array.isArray(c.progressDesc) && c.progressDesc.includes('停滞'))) return false;
+    if (custStatusFilter === 'normal' && (Array.isArray(c.progressDesc) && c.progressDesc.includes('停滞'))) return false;
     return true;
   });
   // 按开通时间降序排列（最新优先）
@@ -1964,6 +2009,7 @@ function getProgressBgColor(name) {
 function fillMonthSelect(id, defaultYear) {
   const sel = document.getElementById(id);
   const cv = sel.value;
+  const wasInit = sel.dataset.monthInit === '1';
   sel.innerHTML = '<option value="">全部</option>';
   const months = new Set();
   appData.customers.forEach(c => { if (c.startDate && c.startDate.length >= 7) months.add(c.startDate.substring(0, 7)); });
@@ -1985,8 +2031,9 @@ function fillMonthSelect(id, defaultYear) {
       sel.appendChild(opt);
     });
   });
-  if (cv && sel.querySelector(`option[value="${cv}"]`)) sel.value = cv;
+  if (wasInit && sel.querySelector('option[value="' + cv + '"]')) sel.value = cv;
   else if (defaultYear) sel.value = defaultYear;
+  sel.dataset.monthInit = '1';
 }
 
 
