@@ -1533,10 +1533,10 @@
       "endDate": "2027-04-24",
       "enabledCustomers": 1,
       "orderCustomers": 1,
-      "location": "四川省",
+      "location": "",
       "onlineDate": "",
       "online": "未上线",
-      "stage": "实施中",
+      "stage": "实施完成",
       "progressDesc": [
         "资料建立",
         "小程序申请",
@@ -1546,7 +1546,7 @@
       ],
       "latestProgress": "已完成小程序申请，支付已开通，小程序备案完成！但是客户又修改了小程序名称，在重新备案中。",
       "unusedAnalysis": "",
-      "estimatedProductCount": "",
+      "estimatedProductCount": 0,
       "prevProductCount": 27,
       "snapshotDate": "2026-06-23"
     },
@@ -2173,31 +2173,6 @@
       "estimatedProductCount": "",
       "prevProductCount": 0,
       "snapshotDate": "2026-06-23"
-    },
-    {
-      "companyId": 245596,
-      "companyName": "茅箭区代荣辉农产品商行（个体工商户）",
-      "channel": "直销",
-      "sourceChannel": "直销",
-      "version": "标准版",
-      "activeLevel": "0",
-      "productCount": 7,
-      "orderCount": 23,
-      "orderAmount": 93606,
-      "industry": "生鲜食材、农贸",
-      "csStaff": "张雯婷",
-      "startDate": "2025-06-04",
-      "endDate": "2026-06-04",
-      "enabledCustomers": 6,
-      "orderCustomers": 5,
-      "location": "湖北省",
-      "online": "未上线",
-      "stage": "实施完成",
-      "progressDesc": [
-        "停滞"
-      ],
-      "latestProgress": "",
-      "unusedAnalysis": ""
     },
     {
       "companyId": 247244,
@@ -58051,5 +58026,5 @@
       }
     ]
   },
-  "_syncTime": 1782184401864
+  "_syncTime": 1782186527948
 }
