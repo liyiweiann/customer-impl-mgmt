@@ -2288,6 +2288,10 @@ function handleExcelUpload(event) {
             if (p.orderAmount !== undefined) c.orderAmount = p.orderAmount;
             if (p.enabledCustomers !== undefined) c.enabledCustomers = p.enabledCustomers;
             if (p.orderCustomers !== undefined) c.orderCustomers = p.orderCustomers;
+            // 同步每日快照（合作伙伴 → 客户），使「最后变动」字段可用
+            if (!appData.customerDailySnapshots) appData.customerDailySnapshots = {};
+            var pSnap = appData.partnerDailySnapshots && appData.partnerDailySnapshots[String(c.companyId)];
+            if (pSnap) appData.customerDailySnapshots[String(c.companyId)] = pSnap.map(s => ({date: s.date, productCount: s.productCount}));
           } else {
             console.warn('[syncProxy] 未找到合作伙伴数据:', c.companyId);
           }
