@@ -429,8 +429,8 @@ body.readonly .pwd-btn { display:none !important; }
         <div class="cust-stat-row" id="cust-stat-row"></div>
         <div class="customer-toolbar">
           <select id="cust-filter-month" onchange="renderCustomerTable()"></select>
-          <select id="cust-filter-version" onchange="renderCustomerTable()">
-            <option value="">全部版本</option>
+          <select id="cust-filter-cs" onchange="renderCustomerTable()">
+            <option value="">全部客服</option>
           </select>
           <select id="cust-filter-stage" onchange="renderCustomerTable()">
             <option value="">全部实施阶段</option>
@@ -464,6 +464,7 @@ body.readonly .pwd-btn { display:none !important; }
                   <th>进度说明</th>
                   <th>实施进度判定</th>
                   <th>实施阶段</th>
+                  <th>最后变动</th>
                   <th>系统版本</th>
                   <th>活跃等级</th>
                   <th>客服</th>
@@ -551,8 +552,13 @@ body.readonly .pwd-btn { display:none !important; }
             <option value="yes">是</option>
             <option value="no">否</option>
           </select>
-          <select id="partner-filter-version" onchange="renderPartnerTable()">
-            <option value="">全部版本</option>
+          <select id="partner-filter-cs" onchange="renderPartnerTable()">
+            <option value="">全部客服</option>
+          </select>
+          <select id="partner-filter-overdue" onchange="renderPartnerTable()">
+            <option value="">是否超期：全部</option>
+            <option value="是">是</option>
+            <option value="否">否</option>
           </select>
           <input type="text" id="partner-search" placeholder="搜索公司名称/ID" oninput="renderPartnerTable()">
           <button class="btn btn-primary" onclick="openSnapshotModal()">📊 快照对比</button>
@@ -571,6 +577,7 @@ body.readonly .pwd-btn { display:none !important; }
                   <th>开通时间</th>
                   <th>开通天数</th>
                   <th>商品总数</th>
+                  <th>最后变动</th>
                   <th>累计订单</th>
                   <th>下游客户总数</th>
                   <th>下单客户</th>
@@ -1477,10 +1484,11 @@ function toggleCustStatusFilter(val) {
 }
 function renderCustomerTable() {
   fillMonthSelect('cust-filter-month', '2026');
-  fillSelect('cust-filter-version', appData.versions, '全部版本');
+  const csStaffList = [...new Set((appData.customers || []).map(c => c.csStaff).filter(s => s))].sort();
+  fillSelect('cust-filter-cs', csStaffList, '全部客服');
   fillSelect('cust-filter-stage', appData.stages, '全部实施阶段');
   const month = document.getElementById('cust-filter-month').value;
-  const version = document.getElementById('cust-filter-version').value;
+  const csStaffFilter = document.getElementById('cust-filter-cs').value;
   const stage = document.getElementById('cust-filter-stage').value;
   const online = document.getElementById('cust-filter-online').value;
   const progressFilter = document.getElementById('cust-filter-progress').value;
@@ -1489,7 +1497,7 @@ function renderCustomerTable() {
   // ---- 基础筛选（不含卡片推进状态筛选） ----
   let baseFiltered = appData.customers.filter(c => {
     if (month && c.startDate) { if (month.length === 4 && c.startDate.substring(0, 4) !== month) return false; if (month.length === 7 && c.startDate.substring(0, 7) !== month) return false; }
-    if (version && c.version !== version) return false;
+    if (csStaffFilter && c.csStaff !== csStaffFilter) return false;
     if (stage && c.stage !== stage) return false;
     if (online && c.online !== online) return false;
     if (progressFilter && judgeCustomerV2Progress(c).label !== progressFilter) return false;
@@ -1543,6 +1551,8 @@ function renderCustomerTable() {
     const avgDays = c.industry && industryAvg[c.industry] != null ? industryAvg[c.industry] + '天' : '-';
     const daysSinceStart = c.startDate ? Math.max(0, Math.ceil((new Date() - new Date(c.startDate)) / 86400000)) : '-';
     const isOverdue = (c.industry && industryAvg[c.industry] != null && c.startDate) ? (industryAvg[c.industry] - daysSinceStart < 0 ? '是' : '否') : '-';
+    const custSnaps = (appData.customerDailySnapshots || {})[c.companyId];
+    const lastChanged = getLastChangedDate(custSnaps);
     return `<tr>
       <td class="col-fixed-left" style="white-space:nowrap;" title="${c.companyName}">${c.companyName}${(c.progressDesc||[]).includes('停滞') ? '<span style="display:inline-block;margin-left:4px;padding:1px 5px;font-size:11px;font-weight:700;color:#fff;background:#ff4d4f;border-radius:3px;vertical-align:middle;">停</span>' : ''}</td>
       <td>${c.startDate || '-'}</td>
@@ -1552,6 +1562,7 @@ function renderCustomerTable() {
       <td class="progress-desc-cell">${progressHtml}</td>
       ${judge.cell}
       <td>${stageHtml}</td>
+      <td style="text-align:center;color:#667788;font-size:12px;">${lastChanged}</td>
       <td>${c.version || '-'}</td>
       <td>${c.activeLevel || '-'}</td>
       <td>${c.csStaff || '-'}</td>
@@ -1948,6 +1959,21 @@ function judgeProgressV2(item) {
   return { label: label, color: color, cell: cell, detail: detailTxt };
 }
 
+// 从每日快照中计算最后一次 productCount 变化的日期
+function getLastChangedDate(snapshots) {
+  if (!snapshots || snapshots.length === 0) return '-';
+  const sorted = [...snapshots].sort((a, b) => a.date > b.date ? 1 : -1); // 升序
+  if (sorted.length === 1) return sorted[0].date;
+  // 从最新一条往前找，找到首个与后一条不同的日期（即该日发生了变化）
+  for (let i = sorted.length - 1; i >= 1; i--) {
+    if (sorted[i].productCount !== sorted[i - 1].productCount) {
+      return sorted[i].date;
+    }
+  }
+  // 所有快照值相同，返回最新一条（首次记录日就是最后变动日）
+  return sorted[sorted.length - 1].date;
+}
+
 // 客户实施进度判定（直接使用通用规则）
 function judgeCustomerV2Progress(c) {
   if (c.online === '已上线') return { label: '已上线', color: '#52c41a', cell: '<td><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-weight:600;font-size:13px;background:rgba(82,196,26,0.12);color:#52c41a;border:1px solid rgba(82,196,26,0.3);">已上线</span></td>', detail: '已上线' };
@@ -2172,6 +2198,21 @@ function handleExcelUpload(event) {
         } else {
           appData.customers.push(newRow);
           added++;
+        }
+      });
+
+      // 记录客户每日快照（用于最后变动日期计算）
+      if (!appData.customerDailySnapshots) appData.customerDailySnapshots = {};
+      const todaySnap = new Date().toISOString().substring(0, 10);
+      dataRows.forEach(function(row) {
+        const cid = row.companyId;
+        if (!appData.customerDailySnapshots[cid]) appData.customerDailySnapshots[cid] = [];
+        const existSnap = appData.customerDailySnapshots[cid].find(function(s) { return s.date === todaySnap; });
+        const snap = { date: todaySnap, productCount: row.productCount || 0 };
+        if (existSnap) {
+          Object.assign(existSnap, snap);
+        } else {
+          appData.customerDailySnapshots[cid].push(snap);
         }
       });
 
@@ -2466,9 +2507,11 @@ function getFilteredPartners() {
   const fProgress = document.getElementById('partner-filter-progress').value;
   const fStartDate = document.getElementById('partner-filter-start-date').value;
   const fEndDate = document.getElementById('partner-filter-end-date').value;
-  const fVersion = document.getElementById('partner-filter-version').value;
   const fProxy = document.getElementById('partner-filter-proxy').value;
+  const fCsStaff = document.getElementById('partner-filter-cs').value;
+  const fOverdue = document.getElementById('partner-filter-overdue').value;
   const fSearch = document.getElementById('partner-search').value.trim().toLowerCase();
+  const overdueAvgMap = buildIndustryAvgDays();
   return all.filter(p => {
     if (fSourceChannel && !(p.sourceChannel || '').toLowerCase().includes(fSourceChannel)) return false;
     const judge = judgePartnerOnline(p);
@@ -2477,7 +2520,13 @@ function getFilteredPartners() {
     if (fProgress && progress.label !== fProgress) return false;
     if (fStartDate && p.startDate && p.startDate < fStartDate) return false;
     if (fEndDate && p.startDate && p.startDate > fEndDate) return false;
-    if (fVersion && p.version !== fVersion) return false;
+    if (fCsStaff && p.csStaff !== fCsStaff) return false;
+    if (fOverdue) {
+      var indAvg = p.industry && overdueAvgMap[p.industry] != null ? overdueAvgMap[p.industry] : null;
+      var dSince = p.startDate ? Math.floor((new Date() - new Date(p.startDate)) / (1000*60*60*24)) : null;
+      var overdueVal = (indAvg != null && dSince != null && indAvg - dSince < 0) ? '是' : '否';
+      if (overdueVal !== fOverdue) return false;
+    }
     if (fProxy === 'yes' && !p.proxyImplementation) return false;
     if (fProxy === 'no' && p.proxyImplementation) return false;
     if (fSearch) {
@@ -2514,7 +2563,7 @@ function renderPartnerTable() {
   const tbody = document.getElementById('partner-tbody');
   const industryAvgP = buildIndustryAvgDays();
   if (pageData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:40px;color:#667788;">暂无合作伙伴客户数据，请导入Excel数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:40px;color:#667788;">暂无合作伙伴客户数据，请导入Excel数据</td></tr>';
   } else {
     tbody.innerHTML = pageData.map(function(p) {
       var judge = judgePartnerOnline(p);
@@ -2523,6 +2572,8 @@ function renderPartnerTable() {
       var avgDaysP = p.industry && industryAvgP[p.industry] != null ? industryAvgP[p.industry] + '天' : '-';
       var daysSinceStartP = p.startDate ? Math.floor((new Date() - new Date(p.startDate)) / (1000*60*60*24)) : null;
       var isOverdueP = (p.industry && industryAvgP[p.industry] != null && daysSinceStartP != null) ? (industryAvgP[p.industry] - daysSinceStartP < 0 ? '是' : '否') : '-';
+      var partnerSnaps = (appData.partnerDailySnapshots || {})[p.companyId];
+      var lastChangedP = getLastChangedDate(partnerSnaps);
       return '<tr>' +
         '<td class="col-fixed-left"><span style="font-weight:600;color:#e0e6ed;">' + (p.companyName || '-') + '</span></td>' +
         '<td>' + (p.sourceChannel || '-') + '</td>' +
@@ -2533,6 +2584,7 @@ function renderPartnerTable() {
         '<td>' + (p.startDate || '-') + '</td>' +
         '<td>' + (daysSinceStartP != null ? daysSinceStartP + '天' : '-') + '</td>' +
         '<td>' + (p.productCount || 0) + '</td>' +
+        '<td style="text-align:center;color:#667788;font-size:12px;">' + lastChangedP + '</td>' +
         '<td>' + (p.orderCount || 0) + '</td>' +
         '<td>' + (p.enabledCustomers || 0) + '</td>' +
         '<td>' + (p.orderCustomers || 0) + '</td>' +
@@ -2555,8 +2607,9 @@ function renderPartnerTable() {
     <button class="btn" ${partnerCurrentPage >= totalPages ? 'disabled' : ''} onclick="partnerCurrentPage++;renderPartnerTable()">&gt;</button>
   </div>`;
 
-  // 版本筛选下拉
-  fillSelect('partner-filter-version', appData.versions, '全部版本');
+  // 客服筛选下拉
+  const partnerCsStaffList = [...new Set((appData.partners || []).map(p => p.csStaff).filter(s => s))].sort();
+  fillSelect('partner-filter-cs', partnerCsStaffList, '全部客服');
 }
 
 // 代实施切换
