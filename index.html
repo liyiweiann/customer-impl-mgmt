@@ -1970,8 +1970,8 @@ function getLastChangedDate(snapshots) {
       return sorted[i].date;
     }
   }
-  // 所有快照值相同，返回最新一条（首次记录日就是最后变动日）
-  return sorted[sorted.length - 1].date;
+  // 所有快照值相同，返回最早一条日期（该值从首次记录起未变化）
+  return sorted[0].date;
 }
 
 // 客户实施进度判定（直接使用通用规则）
