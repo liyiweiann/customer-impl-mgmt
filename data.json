@@ -102,18 +102,19 @@
       "endDate": "2027-05-12",
       "enabledCustomers": 4,
       "orderCustomers": 1,
-      "location": "四川省",
+      "location": "",
       "onlineDate": "",
       "online": "未上线",
       "stage": "实施中",
       "progressDesc": [
         "首次培训",
         "资料建立",
-        "小程序申请"
+        "小程序申请",
+        "停滞"
       ],
       "latestProgress": "前端小程序在等工信部审核；后端正在设计",
       "unusedAnalysis": "",
-      "estimatedProductCount": "",
+      "estimatedProductCount": 0,
       "prevProductCount": 49,
       "snapshotDate": "2026-06-26"
     },
@@ -2402,7 +2403,7 @@
       "endDate": "2027-07-17",
       "enabledCustomers": 268,
       "orderCustomers": 2,
-      "location": "四川省",
+      "location": "",
       "onlineDate": "",
       "online": "未上线",
       "stage": "实施中",
@@ -2410,12 +2411,11 @@
         "首次培训",
         "资料建立",
         "小程序申请",
-        "支付申请",
-        "停滞"
+        "支付申请"
       ],
-      "latestProgress": "商品资料已基本整理完成！小程序申请中，支付还未申请。",
+      "latestProgress": "客户咨询并提交了开户资料，商务事宜已同步销售跟进。",
       "unusedAnalysis": "",
-      "estimatedProductCount": "",
+      "estimatedProductCount": 0,
       "prevProductCount": 28,
       "snapshotDate": "2026-06-26"
     },
@@ -2578,7 +2578,7 @@
       "version": "旗舰版",
       "startDate": "2026-06-03",
       "onlineDate": "",
-      "stage": "实施中",
+      "stage": "实施完成",
       "progressDesc": [
         "首次培训",
         "资料建立",
@@ -2720,6 +2720,11 @@
     ],
     "249446": [
       {
+        "time": "2026-06-26 11:36",
+        "content": "客户咨询并提交了开户资料，商务事宜已同步销售跟进。",
+        "author": ""
+      },
+      {
         "time": "2026-05-14 09:52",
         "content": "商品资料已基本整理完成！小程序申请中，支付还未申请。",
         "author": ""
@@ -2849,13 +2854,13 @@
     ],
     "251239": [
       {
-        "time": "2026-06-17 16:16",
-        "content": "商品资料已经录入的差不多了！小程序目前在申请中。",
+        "time": "2026-06-22 10:34",
+        "content": "商品资料已经搭建的差不多了，目前开始进行商城装修和小程序备案审核",
         "author": ""
       },
       {
-        "time": "2026-06-22 10:34",
-        "content": "商品资料已经搭建的差不多了，目前开始进行商城装修和小程序备案审核",
+        "time": "2026-06-17 16:16",
+        "content": "商品资料已经录入的差不多了！小程序目前在申请中。",
         "author": ""
       }
     ]
@@ -68551,7 +68556,7 @@
       }
     ]
   },
-  "_syncTime": 1782440485192,
+  "_syncTime": 1782444978792,
   "customerDailySnapshots": {
     "238880": [
       {
